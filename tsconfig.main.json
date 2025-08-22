@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist/main",
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "src/main/**/*",
+    "src/shared/**/*",
+    "src/database/**/*"
+  ],
+  "exclude": [
+    "src/renderer/**/*",
+    "tests/**/*"
+  ]
+}

@@ -1,0 +1,189 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Déclenche sur les tags version (ex: v1.0.0)
+  workflow_dispatch:  # Permet de déclencher manuellement
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      # macOS build
+      - name: Build for macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          npm run build:mac
+          # Créer les checksums
+          cd release
+          shasum -a 256 *.dmg > checksums-mac.txt
+          shasum -a 256 *.zip >> checksums-mac.txt
+
+      # Windows build
+      - name: Build for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          npm run build:win
+          # Créer les checksums
+          cd release
+          Get-FileHash *.exe -Algorithm SHA256 | Format-Table -AutoSize > checksums-win.txt
+
+      # Linux build
+      - name: Build for Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run build:linux
+          # Créer les checksums
+          cd release
+          sha256sum *.AppImage > checksums-linux.txt
+          sha256sum *.deb >> checksums-linux.txt || true
+          sha256sum *.rpm >> checksums-linux.txt || true
+          sha256sum *.tar.gz >> checksums-linux.txt || true
+
+      # Upload artifacts pour chaque OS
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/checksums-mac.txt
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/*.exe
+            release/*.msi
+            release/checksums-win.txt
+
+      - name: Upload Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
+            release/checksums-linux.txt
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      # Download tous les artifacts
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-build
+          path: ./release/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: ./release/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+          path: ./release/linux
+
+      # Extraire le nom de la version depuis le tag
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      # Générer les notes de release
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << EOF
+          # TableMoins ${{ steps.get_version.outputs.VERSION }}
+          
+          ## 🚀 What's New
+          
+          - Modern database management interface
+          - Support for PostgreSQL, MySQL, and SQLite
+          - Advanced SQL editor with syntax highlighting
+          - Table data visualization and editing
+          - Query management and file operations
+          
+          ## 📦 Downloads
+          
+          ### macOS (Apple Silicon/Intel)
+          - **TableMoins-${{ steps.get_version.outputs.VERSION }}-arm64.dmg** - For M1/M2/M3 Macs
+          - **TableMoins-${{ steps.get_version.outputs.VERSION }}-x64.dmg** - For Intel Macs
+          
+          ### Windows
+          - **TableMoins-${{ steps.get_version.outputs.VERSION }}-win-x64.exe** - Windows installer
+          
+          ### Linux
+          - **TableMoins-${{ steps.get_version.outputs.VERSION }}-linux-x64.AppImage** - Universal Linux
+          - **TableMoins-${{ steps.get_version.outputs.VERSION }}-linux-amd64.deb** - Debian/Ubuntu
+          
+          ## 🔐 Security
+          
+          All downloads include SHA256 checksums for verification.
+          
+          ## 🐛 Issues
+          
+          Report bugs at: https://github.com/${{ github.repository }}/issues
+          EOF
+
+      # Créer la release GitHub
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: TableMoins ${{ steps.get_version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release/macos/*
+            release/windows/*
+            release/linux/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optionnel: Notifier sur Discord/Slack
+      - name: Notify release
+        if: success()
+        run: |
+          echo "✅ Release ${{ steps.get_version.outputs.VERSION }} created successfully!"
+          echo "📥 Downloads available at: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }}"
