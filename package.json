@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Application desktop de gestion de bases de données SQL - Clone moderne de TablePlus",
   "main": "dist/main/main/main.js",
-  "author": "TableMoins Team",
+  "author": {
+    "name": "TableMoins Team",
+    "email": "contact@tablemoins.dev"
+  },
   "license": "MIT",
   "homepage": ".",
   "scripts": {
