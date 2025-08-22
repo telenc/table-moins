@@ -268,9 +268,6 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
 
   return (
     <div className="flex-1 flex flex-col" style={{ 
-      height: '-webkit-fill-available',
-      height: '-moz-available',
-      height: 'fill-available',
       height: '100%'
     }}>
       {/* Table tabs bar */}

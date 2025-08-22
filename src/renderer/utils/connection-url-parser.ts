@@ -176,7 +176,7 @@ export function parseConnectionUrl(urlString: string): ParsedConnectionInfo | nu
     const forced = new URL(clean.replace(/^([a-zA-Z0-9+.-]+):\/\//, 'http://'));
     const options = parseQS(new URL(clean).search); // garder les options du vrai URL (s'il les gère)
     const host = forced.hostname || undefined;
-    let port = forced.port || DEFAULT_PORT[type] || undefined;
+    const port = forced.port || DEFAULT_PORT[type] || undefined;
     const username = forced.username ? decodeURIComponent(forced.username) : undefined;
     const password = forced.password ? decodeURIComponent(forced.password) : undefined;
 

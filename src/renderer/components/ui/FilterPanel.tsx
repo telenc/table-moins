@@ -127,9 +127,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         case 'NOT LIKE':
           return `${escapedColumn} ${operator} '%${value.replace(/'/g, "''")}%'`;
         case 'IN':
-        case 'NOT IN':
+        case 'NOT IN': {
           const values = value.split(',').map(v => `'${v.trim().replace(/'/g, "''")}'`).join(', ');
           return `${escapedColumn} ${operator} (${values})`;
+        }
         default:
           return `${escapedColumn} ${operator} '${value.replace(/'/g, "''")}'`;
       }
