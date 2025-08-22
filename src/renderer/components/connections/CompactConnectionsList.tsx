@@ -189,12 +189,12 @@ export const CompactConnectionsList: React.FC = () => {
                 {connection.name}
               </Text>
               {isActive && (
-                <Tag color="green" size="small" style={{ margin: 0 }}>
+                <Tag color="green" style={{ margin: 0 }}>
                   Connected
                 </Tag>
               )}
               {isConnecting && (
-                <Tag color="blue" size="small" style={{ margin: 0 }}>
+                <Tag color="blue" style={{ margin: 0 }}>
                   Connecting...
                 </Tag>
               )}

@@ -172,7 +172,7 @@ export const Sidebar: React.FC = () => {
                             {connection.host}:{connection.port}
                           </Text>
                           {activeConnectionId === connection.id && (
-                            <Tag color="green" size="small" style={{ marginLeft: '4px', fontSize: '10px' }}>
+                            <Tag color="green" style={{ marginLeft: '4px', fontSize: '10px' }}>
                               <LinkOutlined /> Actif
                             </Tag>
                           )}

@@ -45,8 +45,4 @@ export interface ElectronAPI {
   };
 }
 
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
-}
+// Window interface declaration is in preload.ts

@@ -71,9 +71,6 @@ export const useSqlEditorStore = create<SqlEditorStore>((set, get) => ({
       editors: {
         ...state.editors,
         [tabId]: {
-          content: DEFAULT_CONTENT,
-          fileName: 'Untitled.sql',
-          hasUnsavedChanges: false,
           ...state.editors[tabId],
           ...data
         }

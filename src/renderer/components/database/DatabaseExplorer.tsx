@@ -120,7 +120,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
         
         // Sélectionner le schéma 'public' par défaut
         if (schemaList.length > 0 && !selectedSchema) {
-          const defaultSchema = schemaList.find(s => s === 'public') || schemaList[0];
+          const defaultSchema = schemaList.find((s: string) => s === 'public') || schemaList[0];
           setSelectedSchema(defaultSchema);
         }
       } else {

@@ -92,11 +92,11 @@ export const App: React.FC = () => {
         setConnectionForm({
           name: parsedInfo.name || '',
           type: parsedInfo.type,
-          host: parsedInfo.host,
-          port: parsedInfo.port,
-          database: parsedInfo.database,
-          username: parsedInfo.username,
-          password: parsedInfo.password,
+          host: parsedInfo.host || '',
+          port: parsedInfo.port || '',
+          database: parsedInfo.database || '',
+          username: parsedInfo.username || '',
+          password: parsedInfo.password || '',
           ssl: parsedInfo.ssl || false,
         });
       } else {

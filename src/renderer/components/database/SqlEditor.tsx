@@ -24,7 +24,7 @@ const COMMON_COLUMNS = ['id', 'name', 'email', 'created_at', 'updated_at', 'dele
  * Génère les suggestions de mots-clés SQL
  */
 const getKeywordSuggestions = (currentWord: string, range: any, monaco: any) => {
-  const suggestions = [];
+  const suggestions: any[] = [];
   const isEmpty = currentWord === '';
   
   SQL_KEYWORDS.forEach(keyword => {
@@ -48,7 +48,7 @@ const getKeywordSuggestions = (currentWord: string, range: any, monaco: any) => 
  * Génère les suggestions de tables depuis le cache
  */
 const getTableSuggestions = async (currentWord: string, range: any, model: any, position: any, monaco: any, connectionId: string, getCachedDatabase: any) => {
-  const suggestions = [];
+  const suggestions: any[] = [];
   
   try {
     const cachedData = getCachedDatabase(connectionId);
@@ -71,7 +71,7 @@ const getTableSuggestions = async (currentWord: string, range: any, model: any, 
       // Suggestions de tables
       const isEmpty = currentWord === '';
       
-      tables.forEach(table => {
+      tables.forEach((table: any) => {
         const tableName = table.name.toLowerCase();
         const qualifiedName = `${table.schema}.${table.name}`;
         const qualifiedNameLower = qualifiedName.toLowerCase();
@@ -117,7 +117,7 @@ const getTableSuggestions = async (currentWord: string, range: any, model: any, 
  * Génère les suggestions de colonnes pour une table spécifique
  */
 const getColumnSuggestions = async (tableName: string, currentWord: string, range: any, monaco: any, connectionId: string) => {
-  const suggestions = [];
+  const suggestions: any[] = [];
   
   try {
     // Ici on pourrait récupérer les colonnes de la table spécifique
@@ -298,7 +298,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
         const uniqueSchemas = [...new Set(allSchemas)];
         
         // Récupérer toutes les tables de tous les schémas
-        const allTables = [];
+        const allTables: any[] = [];
         for (const schema of uniqueSchemas) {
           try {
             const tables = await window.electron.invoke('database:get-tables', activeTab.id, schema);
@@ -793,7 +793,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     }
 
     // Get the query to execute
-    let queryToExecute: string;
+    let queryToExecute: string = '';
     
     // Try to get query at cursor first
     console.log('🔍 DEBUG - Editor ref exists:', !!editorRef.current);
@@ -1327,8 +1327,8 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
                   */
 
                   // Déduplication des suggestions par label pour éviter les doublons
-                  const uniqueSuggestions = suggestions.reduce((acc, current) => {
-                    const exists = acc.find(item => item.label === current.label);
+                  const uniqueSuggestions = suggestions.reduce((acc: any[], current: any) => {
+                    const exists = acc.find((item: any) => item.label === current.label);
                     if (!exists) {
                       acc.push(current);
                     }
@@ -1336,7 +1336,7 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
                   }, []);
 
                   // Debug: Show first few suggestions with more detail
-                  const debugSuggestions = uniqueSuggestions.slice(0, 5).map(s => ({ label: s.label, kind: s.kind }));
+                  const debugSuggestions = uniqueSuggestions.slice(0, 5).map((s: any) => ({ label: s.label, kind: s.kind }));
                   console.log('🔍 SQL Autocompletion returning', uniqueSuggestions.length, 'unique suggestions (from', suggestions.length, 'total) for word "' + currentWord + '":', debugSuggestions);
                   return { suggestions: uniqueSuggestions };
                 }

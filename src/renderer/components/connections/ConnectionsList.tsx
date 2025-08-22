@@ -205,8 +205,8 @@ export const ConnectionsList: React.FC = () => {
                 {getDatabaseTypeIcon(connection.type)}
               </div>
               <Text strong style={{ fontSize: '14px' }}>{connection.name}</Text>
-              {isActive && <Tag color="green" size="small">Connected</Tag>}
-              {isConnecting && <Tag color="blue" size="small">Connecting...</Tag>}
+              {isActive && <Tag color="green">Connected</Tag>}
+              {isConnecting && <Tag color="blue">Connecting...</Tag>}
             </div>
             <div style={{ paddingLeft: '32px' }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
