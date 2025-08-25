@@ -117,6 +117,8 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
+      "identity": null,
+      "gatekeeperAssess": false,
       "target": [
         {
           "target": "dmg",

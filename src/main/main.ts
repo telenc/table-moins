@@ -118,7 +118,33 @@ class TableMoinsApp {
       this.mainWindow.loadURL(`http://localhost:${devPort}`);
       this.mainWindow.webContents.openDevTools();
     } else {
-      this.mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+      // Dans l'app buildée, chercher le fichier index.html
+      const possiblePaths = [
+        join(__dirname, '../renderer/index.html'),
+        join(__dirname, '../../dist/renderer/index.html'),
+        join(__dirname, '../dist/renderer/index.html'),
+        join(process.resourcesPath, 'app.asar/dist/renderer/index.html')
+      ];
+      
+      let htmlPath = '';
+      for (const path of possiblePaths) {
+        try {
+          if (require('fs').existsSync(path)) {
+            htmlPath = path;
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
+        }
+      }
+      
+      if (!htmlPath) {
+        logger.error('Could not find index.html file');
+        htmlPath = possiblePaths[0]; // fallback
+      }
+      
+      logger.info(`Loading HTML from: ${htmlPath}`);
+      this.mainWindow.loadFile(htmlPath);
     }
 
     this.mainWindow.once('ready-to-show', () => {
