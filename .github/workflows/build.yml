@@ -59,7 +59,9 @@ jobs:
         run: npm ci
 
       - name: Build for Linux (dev)
-        run: npm run build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:linux -- --publish never
 
       - name: Upload development build
         uses: actions/upload-artifact@v4
