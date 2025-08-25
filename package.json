@@ -1,6 +1,6 @@
 {
   "name": "table-moins",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Modern desktop application for SQL database management - TablePlus clone",
   "main": "dist/main/main/main.js",
   "author": {
@@ -24,6 +24,7 @@
     "preview": "vite preview",
     "release": "./scripts/release-complete.sh",
     "build:test": "./scripts/build-and-test.sh",
+    "build:test:unsigned": "./scripts/build-test-unsigned.sh",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "playwright test",
@@ -117,13 +118,11 @@
       }
     ],
     "mac": {
-      "icon": "assets/icon.icns",
+      "icon": "assets/app-icon.icns",
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "notarize": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
@@ -133,15 +132,13 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ]

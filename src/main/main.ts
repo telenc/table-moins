@@ -116,6 +116,7 @@ class TableMoinsApp {
     if (isDev) {
       const devPort = process.env.VITE_DEV_SERVER_PORT || '5174';
       this.mainWindow.loadURL(`http://localhost:${devPort}`);
+      // Ouvrir DevTools seulement en mode développement
       this.mainWindow.webContents.openDevTools();
     } else {
       // Dans l'app buildée, chercher le fichier index.html

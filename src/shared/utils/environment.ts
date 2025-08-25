@@ -27,8 +27,15 @@ try {
   console.warn('Erreur lors du chargement du fichier .env:', error);
 }
 
-export const isDev =
-  process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV === 'true';
+// Détecter si on est en développement
+// Méthode 1: Vérifier si on est dans un asar (app packagée)
+const isInAsar = __dirname.includes('app.asar');
+
+// Méthode 2: Vérifier les variables d'environnement
+const envDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV === 'true';
+
+// On est en dev si: pas dans asar ET (NODE_ENV=dev OU ELECTRON_IS_DEV=true OU aucune variable définie)
+export const isDev = !isInAsar && (envDev || (!process.env.NODE_ENV && !process.env.ELECTRON_IS_DEV));
 export const isProd = process.env.NODE_ENV === 'production';
 
 export const APP_CONFIG = {

@@ -53,7 +53,7 @@ npm run build:renderer
 echo "📦 Building Main Process..."
 npm run build:main
 
-echo "📦 Building macOS (with signing)..."
+echo "📦 Building macOS ARM64 (with signing)..."
 npm run build:mac
 
 # echo "📦 Building Windows..."
@@ -72,7 +72,7 @@ ls -lah release/
 echo ""
 echo "📊 File sizes:"
 echo "macOS ARM64 DMG: $(du -h release/TableMoins-${VERSION}-arm64.dmg 2>/dev/null | cut -f1 || echo 'N/A')"
-echo "macOS Intel DMG: $(du -h release/TableMoins-${VERSION}.dmg 2>/dev/null | cut -f1 || echo 'N/A')"
+# echo "macOS Intel DMG: $(du -h release/TableMoins-${VERSION}.dmg 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "Windows EXE: $(du -h release/TableMoins*.exe 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "Linux AppImage: $(du -h release/TableMoins*.AppImage 2>/dev/null | cut -f1 || echo 'N/A')"
 
@@ -120,7 +120,7 @@ Modern desktop application for SQL database management - TablePlus clone
 Choose the appropriate file for your operating system:
 
 - **macOS Apple Silicon**: \`TableMoins-${VERSION}-arm64.dmg\`
-- **macOS Intel**: \`TableMoins-${VERSION}.dmg\` 
+# - **macOS Intel**: \`TableMoins-${VERSION}.dmg\` 
 # - **Windows**: \`TableMoins Setup ${VERSION}.exe\`
 # - **Linux**: \`TableMoins-${VERSION}.AppImage\`
 
@@ -161,8 +161,7 @@ gh release create "${TAG}" \
     --title "📦 TableMoins ${VERSION}" \
     --notes "${RELEASE_NOTES}" \
     release/TableMoins-${VERSION}-arm64.dmg \
-    release/TableMoins-${VERSION}.dmg \
-    release/TableMoins*-mac.zip
+    release/TableMoins*-arm64-mac.zip
     # release/TableMoins*.exe \
     # release/TableMoins*.AppImage \
     # release/TableMoins*.msi
