@@ -40,10 +40,22 @@ jobs:
         run: npm run build
 
   build-dev:
-    name: Development Build
-    runs-on: ubuntu-latest
+    name: Development Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     needs: test
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build_script: npm run build:linux -- --publish never
+            artifact_name: linux-dev-build
+          - os: macos-latest
+            build_script: npm run build:mac -- --publish never
+            artifact_name: mac-dev-build
+          - os: windows-latest
+            build_script: npm run build:win -- --publish never
+            artifact_name: windows-dev-build
 
     steps:
       - name: Check out Git repository
@@ -58,14 +70,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build for Linux (dev)
+      - name: Build for ${{ matrix.os }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run build:linux -- --publish never
+        run: ${{ matrix.build_script }}
 
       - name: Upload development build
         uses: actions/upload-artifact@v4
         with:
-          name: dev-build-${{ github.sha }}
+          name: ${{ matrix.artifact_name }}-${{ github.sha }}
           path: release/*
           retention-days: 7
