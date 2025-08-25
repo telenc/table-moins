@@ -48,7 +48,7 @@ class TableMoinsApp {
       logger.info('Application shutting down');
       // Nettoyage des services lors de la fermeture
       connectionService.cleanup().catch((error) => {
-        logger.error('Erreur lors du nettoyage des services:', error);
+        logger.error('Error during services cleanup:', error);
       });
     });
   }
@@ -58,7 +58,7 @@ class TableMoinsApp {
    */
   private async initializeServices(): Promise<void> {
     try {
-      logger.info('Initialisation des services backend...');
+      logger.info('Initializing backend services...');
       
       // Initialiser le service de chiffrement avec un mot de passe principal
       // TODO: Implémenter la gestion sécurisée du master password
@@ -67,9 +67,9 @@ class TableMoinsApp {
       // Initialiser le service de connexions
       await connectionService.initialize();
       
-      logger.info('Services backend initialisés avec succès');
+      logger.info('Backend services initialized successfully');
     } catch (error) {
-      logger.error('Erreur lors de l\'initialisation des services:', error as Error);
+      logger.error('Error during services initialization:', error as Error);
       throw error;
     }
   }

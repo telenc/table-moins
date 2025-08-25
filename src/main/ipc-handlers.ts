@@ -7,25 +7,25 @@ import { encryptionService } from '../shared/utils/encryption';
 
 const logger = new Logger('IPC');
 
-// Dossier de sauvegarde automatique des fichiers SQL
+// Auto-save directory for SQL files
 const getSqlAutoSaveDirectory = () => {
   return join(app.getPath('userData'), 'sql-files');
 };
 
-// Créer le dossier de sauvegarde automatique s'il n'existe pas
+// Create auto-save directory if it doesn't exist
 const ensureSqlAutoSaveDirectory = async () => {
   const sqlDir = getSqlAutoSaveDirectory();
   try {
     await fs.access(sqlDir);
   } catch {
     await fs.mkdir(sqlDir, { recursive: true });
-    logger.info(`Dossier SQL auto-save créé: ${sqlDir}`);
+    logger.info(`SQL auto-save directory created: ${sqlDir}`);
   }
   return sqlDir;
 };
 
 export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
-  // Gestionnaire pour les dialogues de fichier
+  // Handler for file dialogs
   ipcMain.handle('dialog:open-file', async (_, options) => {
     try {
       if (!mainWindow) return { canceled: true };
@@ -33,17 +33,17 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
       const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
         filters: [
-          { name: 'Fichiers SQL', extensions: ['sql'] },
-          { name: 'Fichiers CSV', extensions: ['csv'] },
-          { name: 'Fichiers JSON', extensions: ['json'] },
-          { name: 'Tous les fichiers', extensions: ['*'] },
+          { name: 'SQL Files', extensions: ['sql'] },
+          { name: 'CSV Files', extensions: ['csv'] },
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] },
         ],
         ...options,
       });
       
       return result;
     } catch (error) {
-      logger.error('Erreur lors de l\'ouverture du dialogue de fichier:', error as Error);
+      logger.error('Error opening file dialog:', error as Error);
       return { canceled: true };
     }
   });
@@ -54,21 +54,21 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
       
       const result = await dialog.showSaveDialog(mainWindow, {
         filters: [
-          { name: 'Fichiers SQL', extensions: ['sql'] },
-          { name: 'Fichiers CSV', extensions: ['csv'] },
-          { name: 'Fichiers JSON', extensions: ['json'] },
+          { name: 'SQL Files', extensions: ['sql'] },
+          { name: 'CSV Files', extensions: ['csv'] },
+          { name: 'JSON Files', extensions: ['json'] },
         ],
         ...options,
       });
       
       return result;
     } catch (error) {
-      logger.error('Erreur lors de la sauvegarde du dialogue de fichier:', error as Error);
+      logger.error('Error saving file dialog:', error as Error);
       return { canceled: true };
     }
   });
 
-  // Gestionnaire pour les informations système
+  // Handler for system information
   ipcMain.handle('system:get-info', () => {
     return {
       platform: process.platform,
@@ -77,7 +77,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     };
   });
 
-  // Gestionnaire pour les logs
+  // Handler for logs
   ipcMain.on('log:info', (_, message) => {
     logger.info(`[Renderer] ${message}`);
   });

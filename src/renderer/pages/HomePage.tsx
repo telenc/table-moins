@@ -67,7 +67,7 @@ export const HomePage: React.FC = () => {
           </Title>
           
           <Title level={4} style={{ color: '#595959', margin: 0, fontWeight: 400 }}>
-            Gestionnaire de bases de données moderne
+            Modern database management tool
           </Title>
           
           <Paragraph style={{ 

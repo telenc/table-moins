@@ -1,153 +1,153 @@
 # 🗃️ TableMoins
 
-**Application desktop moderne de gestion de bases de données SQL**
+**Modern desktop application for SQL database management**
 
-TableMoins est un clone open-source de TablePlus, développé avec Electron, React et TypeScript. Il offre une interface intuitive pour gérer vos bases de données MySQL et PostgreSQL.
+TableMoins is an open-source clone of TablePlus, developed with Electron, React and TypeScript. It offers an intuitive interface to manage your MySQL and PostgreSQL databases.
 
-## ✨ Fonctionnalités
+## ✨ Features
 
-### 🚀 Version Actuelle (MVP)
-- ✅ Interface utilisateur moderne avec Ant Design
-- ✅ Architecture Electron + React + TypeScript
-- ✅ Système de logging intégré
-- ✅ Gestion des thèmes (clair/sombre)
-- ✅ Configuration ESLint + Prettier
+### 🚀 Current Version (MVP)
+- ✅ Modern user interface with Ant Design
+- ✅ Electron + React + TypeScript architecture
+- ✅ Integrated logging system
+- ✅ Theme management (light/dark)
+- ✅ ESLint + Prettier configuration
 
-### 🔄 En Développement
-- 🔌 Gestion des connexions de bases de données
-- 🗂️ Explorateur de structure de bases
-- 📊 Visualiseur de données avec pagination
-- ✏️ Éditeur SQL avec coloration syntaxique
-- 🔍 Recherche et filtrage avancés
+### 🔄 In Development
+- 🔌 Database connection management
+- 🗂️ Database structure explorer
+- 📊 Data viewer with pagination
+- ✏️ SQL editor with syntax highlighting
+- 🔍 Advanced search and filtering
 
 ### 🎯 Roadmap
 - 📤 Import/Export (CSV, JSON, SQL)
-- 🛡️ Sécurité et chiffrement des connexions
-- ⚡ Optimisations de performance
-- 🔌 Système de plugins extensible
-- 🏢 Fonctionnalités entreprise
+- 🛡️ Security and connection encryption
+- ⚡ Performance optimizations
+- 🔌 Extensible plugin system
+- 🏢 Enterprise features
 
 ## 🛠️ Technologies
 
 - **Desktop Framework**: Electron 28+
-- **Frontend**: React 18+ avec TypeScript
+- **Frontend**: React 18+ with TypeScript
 - **UI Library**: Ant Design
 - **State Management**: Zustand
 - **Database Drivers**: mysql2, pg, better-sqlite3
 - **Build Tool**: Vite
 - **Testing**: Jest + Playwright
 
-## 🚀 Installation & Développement
+## 🚀 Installation & Development
 
-### Prérequis
+### Prerequisites
 - Node.js 18+ 
 - npm 8+
 
 ### Installation
 ```bash
-# Cloner le repository
+# Clone the repository
 git clone <repository-url>
 cd TableMoins
 
-# Installer les dépendances
+# Install dependencies
 npm install
 
-# Copier les variables d'environnement
+# Copy environment variables
 cp .env.example .env
 ```
 
-### Développement
+### Development
 ```bash
-# Démarrer en mode développement
+# Start in development mode
 npm run dev
 
-# Build pour production
+# Build for production
 npm run build
 
-# Lancer les tests
+# Run tests
 npm test
 
-# Linter et formatage
+# Linting and formatting
 npm run lint
 npm run format
 ```
 
-### Scripts disponibles
+### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Développement avec hot reload |
-| `npm run build` | Build de production |
-| `npm run build:all` | Build + packaging Electron |
-| `npm test` | Tests unitaires |
-| `npm test:e2e` | Tests end-to-end |
-| `npm run lint` | Linting ESLint |
-| `npm run format` | Formatage Prettier |
+| `npm run dev` | Development with hot reload |
+| `npm run build` | Production build |
+| `npm run build:all` | Build + Electron packaging |
+| `npm test` | Unit tests |
+| `npm test:e2e` | End-to-end tests |
+| `npm run lint` | ESLint linting |
+| `npm run format` | Prettier formatting |
 
-## 📁 Structure du Projet
+## 📁 Project Structure
 
 ```
 src/
 ├── main/                    # Electron main process
-│   ├── main.ts             # Point d'entrée principal
-│   ├── menu.ts             # Menu de l'application
-│   └── ipc-handlers.ts     # Gestionnaires IPC
+│   ├── main.ts             # Main entry point
+│   ├── menu.ts             # Application menu
+│   └── ipc-handlers.ts     # IPC handlers
 ├── renderer/               # Electron renderer process  
-│   ├── components/         # Composants React
-│   ├── pages/             # Pages de l'application
+│   ├── components/         # React components
+│   ├── pages/             # Application pages
 │   ├── stores/            # State management (Zustand)
-│   ├── styles/            # Styles CSS
-│   └── main.tsx           # Point d'entrée React
-├── shared/                # Code partagé
-│   ├── types/             # Types TypeScript
-│   ├── constants/         # Constantes
-│   └── utils/             # Utilitaires
-└── database/              # Gestion des bases de données
-    ├── drivers/           # Drivers MySQL/PostgreSQL
-    └── models/            # Modèles de données
+│   ├── styles/            # CSS styles
+│   └── main.tsx           # React entry point
+├── shared/                # Shared code
+│   ├── types/             # TypeScript types
+│   ├── constants/         # Constants
+│   └── utils/             # Utilities
+└── database/              # Database management
+    ├── drivers/           # MySQL/PostgreSQL drivers
+    └── models/            # Data models
 ```
 
-## 🎨 Interface Utilisateur
+## 🎨 User Interface
 
-L'interface est construite avec Ant Design et suit les principes de Material Design. Elle comprend :
+The interface is built with Ant Design and follows Material Design principles. It includes:
 
-- **Sidebar** : Navigation et gestion des connexions
-- **Zone principale** : Visualisation des données et éditeur SQL
-- **Barre d'outils** : Actions rapides et paramètres
-- **Panneaux modulaires** : Redimensionnables et personnalisables
+- **Sidebar**: Navigation and connection management
+- **Main area**: Data visualization and SQL editor
+- **Toolbar**: Quick actions and settings
+- **Modular panels**: Resizable and customizable
 
-## 🔒 Sécurité
+## 🔒 Security
 
-- Chiffrement AES-256 pour les mots de passe
-- Support SSL/TLS pour les connexions distantes
-- Validation stricte des entrées utilisateur
-- Audit trail des actions sensibles
+- AES-256 encryption for passwords
+- SSL/TLS support for remote connections
+- Strict user input validation
+- Audit trail for sensitive actions
 
-## 🤝 Contribution
+## 🤝 Contributing
 
-Les contributions sont les bienvenues ! Veuillez :
+Contributions are welcome! Please:
 
-1. Forker le projet
-2. Créer une branche pour votre fonctionnalité
-3. Commiter vos changements
-4. Pousser vers la branche
-5. Ouvrir une Pull Request
+1. Fork the project
+2. Create a branch for your feature
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
-### Guidelines de développement
+### Development Guidelines
 
-- Respecter les conventions TypeScript
-- Écrire des tests pour les nouvelles fonctionnalités  
-- Suivre les patterns établis
-- Maintenir une couverture de tests > 80%
+- Follow TypeScript conventions
+- Write tests for new features  
+- Follow established patterns
+- Maintain test coverage > 80%
 
-## 📄 Licence
+## 📄 License
 
-MIT License - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+MIT License - see the [LICENSE](LICENSE) file for more details.
 
-## 🙏 Remerciements
+## 🙏 Acknowledgments
 
-Inspiré par TablePlus et développé avec passion pour la communauté open-source.
+Inspired by TablePlus and developed with passion for the open-source community.
 
 ---
 
-**Développé avec ❤️ par l'équipe TableMoins**
+**Developed with ❤️ by the TableMoins team**
