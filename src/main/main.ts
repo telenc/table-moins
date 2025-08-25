@@ -6,7 +6,7 @@ import { join } from 'path';
 config({ path: join(__dirname, '../../.env') });
 
 
-import { app, BrowserWindow, Menu, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { isDev } from '../shared/utils/environment';
 import { createMenu } from './menu';
 import { setupIpcHandlers } from './ipc-handlers';

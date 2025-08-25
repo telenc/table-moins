@@ -194,7 +194,6 @@ export class MySQLDriver extends BaseDatabaseDriver {
    * Récupère la liste des tables
    */
   async getTables(database?: string): Promise<TableInfo[]> {
-    const dbName = database || this.connection.database || 'DATABASE()';
     const query = `
       SELECT 
         table_name as name,

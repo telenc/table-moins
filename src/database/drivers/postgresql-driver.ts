@@ -296,7 +296,7 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
   /**
    * Récupère les colonnes d'une table
    */
-  async getColumns(tableName: string, database?: string): Promise<ColumnInfo[]> {
+  async getColumns(tableName: string, _database?: string): Promise<ColumnInfo[]> {
     const query = `
       SELECT 
         c.column_name as name,

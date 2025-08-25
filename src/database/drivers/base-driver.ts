@@ -73,6 +73,7 @@ export abstract class BaseDatabaseDriver {
    * Récupère les informations de connexion (sans mot de passe)
    */
   getConnectionInfo(): Omit<DatabaseConnection, 'password'> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...connectionInfo } = this.connection;
     return connectionInfo;
   }

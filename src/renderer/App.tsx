@@ -17,14 +17,10 @@ import {
   ArrowLeft,
   Server,
   TestTube,
-  Settings,
   Link,
   AlertCircle,
   Loader2,
-  CheckCircle,
   XCircle,
-  Trash2,
-  Edit,
 } from 'lucide-react';
 import { TabSystem, TabSystemRef } from './components/tabs/TabSystem';
 import { useTabsStore } from './stores/tabs-store';
@@ -34,7 +30,6 @@ import { TableTabs, TableTabsRef } from './components/database/TableTabs';
 import {
   parseConnectionUrl,
   isConnectionUrl,
-  type ParsedConnectionInfo,
 } from './utils/connection-url-parser';
 import { toast } from 'sonner';
 import type {
