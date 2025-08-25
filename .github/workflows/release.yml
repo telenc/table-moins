@@ -6,88 +6,30 @@ on:
       - 'v*.*.*'  # Trigger on version tags like v1.0.0
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: write  # Required to create releases and upload assets
+
 jobs:
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      tag_name: ${{ steps.get_version.outputs.tag_name }}
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v4
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.tag_name }}
-          release_name: TableMoins ${{ steps.get_version.outputs.tag_name }}
-          body: |
-            ## 📦 TableMoins ${{ steps.get_version.outputs.tag_name }}
-            
-            Modern desktop application for SQL database management - TablePlus clone
-            
-            ### 📥 Downloads
-            
-            Choose the appropriate file for your operating system:
-            
-            - **macOS**: `TableMoins-${{ steps.get_version.outputs.tag_name }}.dmg`
-            - **Windows**: `TableMoins-Setup-${{ steps.get_version.outputs.tag_name }}.exe`  
-            - **Linux**: `TableMoins-${{ steps.get_version.outputs.tag_name }}.AppImage`
-            
-            ### 🚀 What's New
-            
-            See the [CHANGELOG](https://github.com/telenc/table-moins/blob/main/CHANGELOG.md) for detailed changes.
-            
-            ### 🛠️ Installation
-            
-            **macOS**: Download the `.dmg` file, open it, and drag TableMoins to Applications folder.  
-            **Windows**: Download and run the `.exe` installer.  
-            **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run.
-            
-            ---
-            
-            **Developed with ❤️ by the TableMoins team**
-          draft: false
-          prerelease: false
-
-  build-release:
-    name: Build Release for ${{ matrix.os }}
+  build-and-release:
+    name: Build and Release for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: create-release
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             platform: linux
-            arch: x64
             build_script: npm run build:linux -- --publish never
-            artifact_path: release/*.AppImage
-            asset_name: TableMoins-${{ needs.create-release.outputs.tag_name }}.AppImage
-            asset_content_type: application/octet-stream
+            artifact_pattern: release/*.AppImage
 
           - os: macos-latest
             platform: mac
-            arch: x64
             build_script: npm run build:mac -- --publish never
-            artifact_path: release/*.dmg
-            asset_name: TableMoins-${{ needs.create-release.outputs.tag_name }}.dmg
-            asset_content_type: application/octet-stream
+            artifact_pattern: release/*.dmg
 
           - os: windows-latest
             platform: windows
-            arch: x64
             build_script: npm run build:win -- --publish never
-            artifact_path: release/*.exe
-            asset_name: TableMoins-Setup-${{ needs.create-release.outputs.tag_name }}.exe
-            asset_content_type: application/octet-stream
+            artifact_pattern: release/*.exe
 
     steps:
       - name: Check out Git repository
@@ -116,20 +58,36 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ${{ matrix.build_script }}
 
-      - name: Find built file
-        id: find_file
-        shell: bash
-        run: |
-          file_path=$(ls ${{ matrix.artifact_path }} | head -n1)
-          echo "file_path=$file_path" >> $GITHUB_OUTPUT
-          echo "Found file: $file_path"
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        if: github.ref_type == 'tag'
+        with:
+          files: ${{ matrix.artifact_pattern }}
+          body: |
+            ## 📦 TableMoins ${{ github.ref_name }}
+            
+            Modern desktop application for SQL database management - TablePlus clone
+            
+            ### 📥 Downloads
+            
+            Choose the appropriate file for your operating system:
+            
+            - **macOS**: Download the `.dmg` file
+            - **Windows**: Download the `.exe` installer  
+            - **Linux**: Download the `.AppImage` file
+            
+            ### 🚀 What's New
+            
+            See the [CHANGELOG](https://github.com/telenc/table-moins/blob/main/CHANGELOG.md) for detailed changes.
+            
+            ### 🛠️ Installation
+            
+            **macOS**: Open the `.dmg` file and drag TableMoins to Applications folder.  
+            **Windows**: Run the `.exe` installer.  
+            **Linux**: Make the `.AppImage` file executable (`chmod +x`) and run it.
+            
+            ---
+            
+            **Developed with ❤️ by the TableMoins team**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.find_file.outputs.file_path }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: ${{ matrix.asset_content_type }}
