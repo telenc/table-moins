@@ -150,4 +150,20 @@ Inspired by TablePlus and developed with passion for the open-source community.
 
 ---
 
-**Developed with ❤️ by the Rémi Telenczak**
+## 🚀 Built with AI
+
+This project was **fully developed** using **AI pair programming** with [Claude Code](https://claude.ai/code), Anthropic's official CLI for Claude. From initial architecture to final deployment, every feature was crafted through AI-assisted development.
+
+**Claude Code** enables:
+
+- 🏗️ **Full-stack development** - Frontend, backend, database, and deployment
+- 🔧 **Modern toolchain integration** - Vite, TypeScript, Electron, React
+- 🚀 **End-to-end automation** - From code generation to GitHub releases
+- 🎯 **Best practices enforcement** - Security, performance, and maintainability
+- 📱 **Cross-platform builds** - macOS, Windows, and Linux support
+
+*Discover the future of development at [claude.ai/code](https://claude.ai/code)*
+
+---
+
+### Developed with ❤️ by Rémi Telenczak using Claude Code

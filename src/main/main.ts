@@ -80,8 +80,14 @@ class TableMoinsApp {
       contents.on('will-navigate', (event, navigationUrl) => {
         const parsedUrl = new URL(navigationUrl);
         
+        // En dev: autoriser localhost
+        // En prod: autoriser les fichiers locaux (file://) et bloquer les sites externes
         const devPort = process.env.VITE_DEV_SERVER_PORT || '5174';
-        if (parsedUrl.origin !== `http://localhost:${devPort}` && !isDev) {
+        const isAllowedUrl = isDev 
+          ? parsedUrl.origin === `http://localhost:${devPort}`
+          : parsedUrl.protocol === 'file:';
+          
+        if (!isAllowedUrl) {
           event.preventDefault();
           logger.warn(`Navigation bloquée vers: ${navigationUrl}`);
         }
@@ -113,43 +119,28 @@ class TableMoinsApp {
     });
 
     // Charger l'application
+    
     if (isDev) {
       const devPort = process.env.VITE_DEV_SERVER_PORT || '5174';
       this.mainWindow.loadURL(`http://localhost:${devPort}`);
       // Ouvrir DevTools seulement en mode développement
       this.mainWindow.webContents.openDevTools();
     } else {
-      // Dans l'app buildée, chercher le fichier index.html
-      const possiblePaths = [
-        join(__dirname, '../renderer/index.html'),
-        join(__dirname, '../../dist/renderer/index.html'),
-        join(__dirname, '../dist/renderer/index.html'),
-        join(process.resourcesPath, 'app.asar/dist/renderer/index.html')
-      ];
-      
-      let htmlPath = '';
-      for (const path of possiblePaths) {
-        try {
-          if (require('fs').existsSync(path)) {
-            htmlPath = path;
-            break;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-      
-      if (!htmlPath) {
-        logger.error('Could not find index.html file');
-        htmlPath = possiblePaths[0]; // fallback
-      }
-      
+      // Charger l'application en mode production
+      const htmlPath = join(__dirname, '../../renderer/index.html');
       logger.info(`Loading HTML from: ${htmlPath}`);
       this.mainWindow.loadFile(htmlPath);
     }
 
     this.mainWindow.once('ready-to-show', () => {
       this.mainWindow?.show();
+      
+      // Ne plus ouvrir DevTools en production maintenant que c'est fixé
+      // if (!isDev) {
+      //   console.log('🔍 Opening DevTools for production debugging');
+      //   this.mainWindow?.webContents.openDevTools();
+      // }
+      
       logger.info('Main window ready');
     });
 

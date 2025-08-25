@@ -1,6 +1,6 @@
 {
   "name": "table-moins",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Modern desktop application for SQL database management - TablePlus clone",
   "main": "dist/main/main/main.js",
   "author": {

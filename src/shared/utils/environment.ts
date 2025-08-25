@@ -27,15 +27,45 @@ try {
   console.warn('Erreur lors du chargement du fichier .env:', error);
 }
 
-// Détecter si on est en développement
-// Méthode 1: Vérifier si on est dans un asar (app packagée)
-const isInAsar = __dirname.includes('app.asar');
+// Détecter si on est en développement de manière fiable
+let isDevMode = false;
 
-// Méthode 2: Vérifier les variables d'environnement
-const envDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV === 'true';
+// Multiple methods to detect development mode for reliability
+try {
+  // Method 1: Si on est dans app.asar, on est TOUJOURS en production
+  if (require.main && require.main.filename.indexOf('app.asar') !== -1) {
+    isDevMode = false;
+  } 
+  // Method 2: Si NODE_ENV est explicitement défini, l'utiliser
+  else if (process.env.NODE_ENV === 'production') {
+    isDevMode = false;
+  } else if (process.env.NODE_ENV === 'development') {
+    isDevMode = true;
+  } else {
+    // Method 3: Check if we're running from source (pas asar et pas NODE_ENV défini)
+    if (require.main && require.main.filename.indexOf('app.asar') === -1) {
+      isDevMode = true;
+    }
+    
+    // Method 4: Check for development server port (seulement si pas asar)
+    if (!isDevMode && process.env.VITE_DEV_SERVER_PORT) {
+      isDevMode = true;
+    }
+    
+    // Method 5: Check if running with electron . (source directory)
+    if (!isDevMode && process.argv.includes('.')) {
+      isDevMode = true;
+    }
+  }
+  
+  
+} catch (error) {
+  console.warn('Error during environment detection:', error);
+  // Default to production for safety
+  isDevMode = false;
+}
 
-// On est en dev si: pas dans asar ET (NODE_ENV=dev OU ELECTRON_IS_DEV=true OU aucune variable définie)
-export const isDev = !isInAsar && (envDev || (!process.env.NODE_ENV && !process.env.ELECTRON_IS_DEV));
+export const isDev = isDevMode;
 export const isProd = process.env.NODE_ENV === 'production';
 
 export const APP_CONFIG = {
