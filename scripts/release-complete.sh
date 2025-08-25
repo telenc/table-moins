@@ -152,7 +152,7 @@ See the [CHANGELOG](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/CHAN
 
 ---
 
-**Developed with ❤️ by the TableMoins team**
+**Developed with ❤️ by the Rémi Telenczak team**
 EOF
 )
 

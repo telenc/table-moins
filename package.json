@@ -4,8 +4,8 @@
   "description": "Modern desktop application for SQL database management - TablePlus clone",
   "main": "dist/main/main/main.js",
   "author": {
-    "name": "TableMoins Team",
-    "email": "contact@tablemoins.dev"
+    "name": "Telencr",
+    "email": "remitelen@gmail.com"
   },
   "license": "MIT",
   "homepage": ".",

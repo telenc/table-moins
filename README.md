@@ -150,4 +150,4 @@ Inspired by TablePlus and developed with passion for the open-source community.
 
 ---
 
-**Developed with ❤️ by the TableMoins team**
+**Developed with ❤️ by the Rémi Telenczak**
