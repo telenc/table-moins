@@ -11,14 +11,18 @@ import {
   Filter,
 } from 'lucide-react';
 import { TabConnection } from '../../../database/connection-service';
-import { JsonModal } from '../ui/JsonModal';
 import { ResizableTable } from '../ui/ResizableTable';
 import { FilterPanel, FilterCondition, FilterMode } from '../ui/FilterPanel';
+import JsonView from '@uiw/react-json-view';
+import { Search, Copy, Check, X as XIcon } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface DataViewerProps {
   activeTab: TabConnection | null;
   tableName?: string;
   onBack?: () => void;
+  sqlFilter?: string;
+  onForeignKeyClick?: (targetTable: string, targetColumn: string, value: any) => void;
 }
 
 interface TableData {
@@ -37,6 +41,8 @@ interface ColumnStructure {
   isUnique: boolean;
   isAutoIncrement: boolean;
   comment: string;
+  foreignKeyTable?: string;
+  foreignKeyColumn?: string;
 }
 
 interface IndexInfo {
@@ -63,7 +69,13 @@ interface EditingDataCell {
   value: string;
 }
 
-export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, onBack }) => {
+export const DataViewer: React.FC<DataViewerProps> = ({
+  activeTab,
+  tableName,
+  onBack,
+  sqlFilter,
+  onForeignKeyClick,
+}) => {
   const [data, setData] = useState<TableData | null>(null);
   const [structure, setStructure] = useState<ColumnStructure[] | null>(null);
   const [indexes, setIndexes] = useState<IndexInfo[] | null>(null);
@@ -74,8 +86,11 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
   const [limit, setLimit] = useState(25);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingDataCell, setEditingDataCell] = useState<EditingDataCell | null>(null);
-  const [jsonModalData, setJsonModalData] = useState<any>(null);
-  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  // JSON viewer state (now managed per table, but kept for current table)
+  const [jsonViewerData, setJsonViewerData] = useState<any>(null);
+  const [jsonViewerOpen, setJsonViewerOpen] = useState(false);
+  const [jsonSearchTerm, setJsonSearchTerm] = useState('');
+  const [jsonCopied, setJsonCopied] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -93,9 +108,28 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
         filterConditions: FilterCondition[];
         page: number;
         filterPanelOpen: boolean;
+        jsonViewerOpen: boolean;
+        jsonViewerData: any;
+        jsonSearchTerm: string;
       }
     >
   >({});
+
+  // Initialize with SQL filter if provided (for foreign key navigation)
+  useEffect(() => {
+    if (sqlFilter && tableName) {
+      // Remove "WHERE " prefix if present
+      const cleanFilter = sqlFilter.replace(/^WHERE\s+/i, '');
+      console.log('🔍 DEBUG - Setting sqlFilter for foreign key navigation:', {
+        sqlFilter,
+        cleanFilter,
+        tableName,
+      });
+      setWhereClause(cleanFilter);
+      // Also open the filter panel to show the user that a filter is applied
+      setFilterPanelOpen(true);
+    }
+  }, [sqlFilter, tableName]);
 
   // Track previous table name to detect real table changes
   const previousTableName = useRef<string | undefined>(undefined);
@@ -125,15 +159,25 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
       setFilterConditions(savedFilters.filterConditions);
       setPage(savedFilters.page);
       setFilterPanelOpen(savedFilters.filterPanelOpen);
+      setJsonViewerOpen(savedFilters.jsonViewerOpen || false);
+      setJsonViewerData(savedFilters.jsonViewerData || null);
+      setJsonSearchTerm(savedFilters.jsonSearchTerm || '');
     } else {
       console.log('🔍 DEBUG - No saved filters, using defaults for table:', tableName);
-      setWhereClause('');
+      // Don't reset whereClause if we have an sqlFilter from foreign key navigation
+      if (!sqlFilter) {
+        setWhereClause('');
+      }
       setFilterMode('builder');
       setFilterConditions([]);
       setPage(1);
-      setFilterPanelOpen(false);
+      // Keep filter panel open if we have an sqlFilter from foreign key navigation
+      setFilterPanelOpen(!!sqlFilter);
+      setJsonViewerOpen(false);
+      setJsonViewerData(null);
+      setJsonSearchTerm('');
     }
-  }, [tableName, tableFilters]); // Include tableFilters to handle first-time restoration
+  }, [tableName, tableFilters, sqlFilter]); // Include sqlFilter to prevent overriding it
 
   // Charger les données quand la table change
   useEffect(() => {
@@ -151,6 +195,8 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
       if (viewMode === 'data') {
         console.log('🔍 DEBUG useEffect - Loading table data');
         loadTableData();
+        // Also load structure to get foreign key information
+        loadTableStructure();
       } else {
         console.log('🔍 DEBUG useEffect - Loading structure and indexes');
         loadTableStructure();
@@ -230,12 +276,18 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
 
   const loadTableStructure = async () => {
     if (!activeTab || !tableName) return;
+    console.log('🔍 DEBUG loadTableStructure - Starting for table:', tableName);
 
     try {
       setLoading(true);
       setError(null);
 
       const columns = await window.electron.invoke('database:get-columns', activeTab.id, tableName);
+      console.log('🔍 DEBUG loadTableStructure - Got columns:', columns);
+
+      // Log foreign keys specifically
+      const foreignKeys = columns?.filter((col: any) => col.isForeignKey) || [];
+      console.log('🔍 DEBUG Foreign keys found:', foreignKeys);
 
       setStructure(columns);
     } catch (err) {
@@ -321,6 +373,9 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
       filterConditions: FilterCondition[];
       page: number;
       filterPanelOpen: boolean;
+      jsonViewerOpen: boolean;
+      jsonViewerData: any;
+      jsonSearchTerm: string;
     }> = {}
   ) => {
     if (tableName) {
@@ -332,6 +387,9 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
           filterConditions: overrides.filterConditions ?? filterConditions,
           page: overrides.page ?? page,
           filterPanelOpen: overrides.filterPanelOpen ?? filterPanelOpen,
+          jsonViewerOpen: overrides.jsonViewerOpen ?? jsonViewerOpen,
+          jsonViewerData: overrides.jsonViewerData ?? jsonViewerData,
+          jsonSearchTerm: overrides.jsonSearchTerm ?? jsonSearchTerm,
         },
       }));
     }
@@ -480,9 +538,109 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
       }
     }
 
-    setJsonModalData(jsonData);
-    setJsonModalOpen(true);
+    setJsonViewerData(jsonData);
+    setJsonViewerOpen(true);
+
+    // Save JSON viewer state for this table
+    saveTableState({
+      jsonViewerOpen: true,
+      jsonViewerData: jsonData,
+      jsonSearchTerm: '',
+    });
   };
+
+  // Handle JSON viewer close
+  const handleJsonViewClose = () => {
+    setJsonViewerOpen(false);
+    setJsonViewerData(null);
+    setJsonSearchTerm('');
+
+    // Save JSON viewer state for this table
+    saveTableState({
+      jsonViewerOpen: false,
+      jsonViewerData: null,
+      jsonSearchTerm: '',
+    });
+  };
+
+  // Handle JSON copy
+  const handleJsonCopy = () => {
+    if (jsonViewerData) {
+      navigator.clipboard.writeText(JSON.stringify(jsonViewerData, null, 2));
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 2000);
+    }
+  };
+
+  // Filter JSON data based on search term
+  const filteredJsonData = useMemo(() => {
+    if (!jsonSearchTerm.trim() || !jsonViewerData) return jsonViewerData;
+
+    const searchLower = jsonSearchTerm.toLowerCase();
+
+    const containsSearchTerm = (obj: any, searchKey: string): boolean => {
+      if (obj === null || obj === undefined) return false;
+
+      if (typeof obj === 'string' || typeof obj === 'number') {
+        return String(obj).toLowerCase().includes(searchKey);
+      }
+
+      if (Array.isArray(obj)) {
+        return obj.some(item => containsSearchTerm(item, searchKey));
+      }
+
+      if (typeof obj === 'object') {
+        return Object.entries(obj).some(
+          ([key, value]) =>
+            key.toLowerCase().includes(searchKey) || containsSearchTerm(value, searchKey)
+        );
+      }
+
+      return false;
+    };
+
+    const filterObject = (obj: any, searchKey: string): any => {
+      if (obj === null || typeof obj !== 'object') {
+        return obj;
+      }
+
+      if (Array.isArray(obj)) {
+        const filteredArray = obj
+          .map(item => filterObject(item, searchKey))
+          .filter(item => item !== undefined);
+        return filteredArray.length > 0 ? filteredArray : undefined;
+      }
+
+      const filtered: any = {};
+      let hasMatch = false;
+
+      for (const [key, value] of Object.entries(obj)) {
+        // Always include if key matches
+        if (key.toLowerCase().includes(searchKey)) {
+          filtered[key] = value; // Keep full value, not filtered
+          hasMatch = true;
+        }
+        // Or if value contains search term (keep full structure)
+        else if (containsSearchTerm(value, searchKey)) {
+          if (typeof value === 'object' && value !== null) {
+            const nestedResult = filterObject(value, searchKey);
+            if (nestedResult !== undefined) {
+              filtered[key] = nestedResult;
+              hasMatch = true;
+            }
+          } else {
+            filtered[key] = value;
+            hasMatch = true;
+          }
+        }
+      }
+
+      return hasMatch ? filtered : undefined;
+    };
+
+    const result = filterObject(jsonViewerData, searchLower);
+    return result !== undefined ? result : {};
+  }, [jsonViewerData, jsonSearchTerm]);
 
   // Handle cell double-click for editing
   const handleCellDoubleClick = (rowIndex: number, field: keyof ColumnStructure) => {
@@ -683,18 +841,22 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
         </div>
       </div>
 
-      {/* Error */}
-      {error && <div className="p-4 bg-red-50 text-red-700 text-sm">{error}</div>}
+      {/* Main Content Area - Flex Row for Side-by-Side Layout */}
+      <div className="flex-1 flex flex-row min-h-0">
+        {/* Left Panel - Table Content (resizes when JSON viewer is open) */}
+        <div className={`flex flex-col min-h-0 ${jsonViewerOpen ? 'w-1/2' : 'w-full'}`}>
+          {/* Error */}
+          {error && <div className="p-4 bg-red-50 text-red-700 text-sm">{error}</div>}
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center h-32 text-gray-500">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            Loading data...
-          </div>
-        </div>
-      )}
+          {/* Loading */}
+          {loading && (
+            <div className="flex items-center justify-center h-32 text-gray-500">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Loading data...
+              </div>
+            </div>
+          )}
 
       {/* Data Table */}
       {viewMode === 'data' && data && !loading && (
@@ -716,8 +878,15 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
             columns={data.columns.map(column => ({
               key: column,
               title: column,
-              render: (value: any) => {
+              render: (value: any, row: any, rowIndex: number) => {
                 const isJson = isJsonValue(value);
+
+                // Check if this column has foreign key relations
+                const columnInfo = structure?.find(col => col.name === column);
+                const hasForeignKey = columnInfo?.isForeignKey && onForeignKeyClick && value;
+                const hasReverseForeignKey =
+                  columnInfo?.isReferencedByOtherTables && onForeignKeyClick && value;
+
                 return (
                   <div className="flex items-center gap-1">
                     <div className="truncate flex-1" title={formatCellValue(value)}>
@@ -727,6 +896,66 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
                         <span className="text-gray-900">{formatCellValue(value)}</span>
                       )}
                     </div>
+
+                    {/* Foreign Key Navigation Button */}
+                    {hasForeignKey && columnInfo && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          onForeignKeyClick!(
+                            columnInfo.foreignKeyTable!,
+                            columnInfo.foreignKeyColumn!,
+                            value
+                          );
+                        }}
+                        className="ml-1 text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0"
+                        title={`Open ${columnInfo.foreignKeyTable} where ${columnInfo.foreignKeyColumn} = ${value}`}
+                      >
+                        <svg
+                          className="h-3 w-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                          />
+                        </svg>
+                      </button>
+                    )}
+
+                    {/* Reverse Foreign Key Navigation Buttons */}
+                    {hasReverseForeignKey &&
+                      columnInfo?.referencedByTables?.map((refTable, index) => (
+                        <button
+                          key={`${refTable.table}-${refTable.column}-${index}`}
+                          onClick={e => {
+                            e.stopPropagation();
+                            onForeignKeyClick!(refTable.table, refTable.column, value);
+                          }}
+                          className="ml-1 text-green-600 hover:text-green-800 transition-colors flex-shrink-0"
+                          title={`Open ${refTable.table} where ${refTable.column} = ${value}`}
+                        >
+                          <svg
+                            className="h-3 w-3 transform rotate-180"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                            />
+                          </svg>
+                        </button>
+                      ))}
+
+                    {/* JSON View Button */}
                     {isJson && (
                       <button
                         onClick={e => {
@@ -750,6 +979,16 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
             onEditingChange={setEditingDataCell}
             onSort={handleSort}
             maxHeight="calc(100vh - 180px)"
+            foreignKeys={
+              structure
+                ?.filter(col => col.isForeignKey)
+                .map(col => ({
+                  columnName: col.name,
+                  targetTable: col.foreignKeyTable || '',
+                  targetColumn: col.foreignKeyColumn || '',
+                })) || []
+            }
+            onForeignKeyClick={onForeignKeyClick}
           />
 
           {/* TablePlus-style Pagination Controls - Always visible at bottom */}
@@ -1112,20 +1351,97 @@ export const DataViewer: React.FC<DataViewerProps> = ({ activeTab, tableName, on
         </div>
       )}
 
-      {/* Structure Empty State */}
-      {viewMode === 'structure' && structure && !loading && structure.length === 0 && (
-        <div className="flex items-center justify-center h-32 text-gray-500">
-          <p>No structure found for {tableName}</p>
+          {/* Structure Empty State */}
+          {viewMode === 'structure' && structure && !loading && structure.length === 0 && (
+            <div className="flex items-center justify-center h-32 text-gray-500">
+              <p>No structure found for {tableName}</p>
+            </div>
+          )}
         </div>
-      )}
 
-      {/* JSON Modal */}
-      <JsonModal
-        isOpen={jsonModalOpen}
-        onClose={() => setJsonModalOpen(false)}
-        data={jsonModalData}
-        title="JSON Data Viewer"
-      />
+        {/* JSON Viewer - Right Panel in Side-by-Side Layout */}
+        {jsonViewerOpen && jsonViewerData && (
+          <div className="w-1/2 h-full bg-white border-l shadow-lg flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+              <h3 className="text-lg font-medium text-gray-900">JSON Viewer</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleJsonCopy}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Copy JSON"
+                >
+                  {jsonCopied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4 text-gray-600" />
+                  )}
+                </button>
+                <button
+                  onClick={handleJsonViewClose}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Close"
+                >
+                  <XIcon className="h-4 w-4 text-gray-600" />
+                </button>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="px-4 py-3 border-b bg-gray-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search keys or values..."
+                  value={jsonSearchTerm}
+                  onChange={e => {
+                    const newSearchTerm = e.target.value;
+                    setJsonSearchTerm(newSearchTerm);
+                    // Save search term for this table
+                    saveTableState({
+                      jsonSearchTerm: newSearchTerm,
+                    });
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                {jsonSearchTerm && (
+                  <button
+                    onClick={() => {
+                      setJsonSearchTerm('');
+                      saveTableState({
+                        jsonSearchTerm: '',
+                      });
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    title="Clear search"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-4">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                <JsonView
+                  value={filteredJsonData}
+                  collapsed={jsonSearchTerm ? false : 1}
+                  displayDataTypes={false}
+                  displayObjectSize={true}
+                  enableClipboard={true}
+                  style={{
+                    fontSize: '13px',
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  }}
+                />
+              </div>
+            </div>
+        </div>
+        )}
+      </div>
     </div>
   );
 };

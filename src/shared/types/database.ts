@@ -60,6 +60,9 @@ export interface ColumnInfo {
   comment?: string;
   foreignKeyTable?: string;
   foreignKeyColumn?: string;
+  // Reverse foreign keys (tables that reference this column)
+  isReferencedByOtherTables?: boolean;
+  referencedByTables?: { table: string, column: string }[];
 }
 
 export interface IndexInfo {
@@ -67,6 +70,18 @@ export interface IndexInfo {
   type: 'primary' | 'unique' | 'index' | 'fulltext';
   columns: string[];
   isUnique: boolean;
+}
+
+export interface ForeignKeyInfo {
+  constraintName: string;
+  sourceSchema: string;
+  sourceTable: string;
+  sourceColumn: string;
+  targetSchema: string;
+  targetTable: string;
+  targetColumn: string;
+  onDelete?: string;
+  onUpdate?: string;
 }
 
 export interface QueryResult {

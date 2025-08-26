@@ -11,6 +11,7 @@ interface TableTab {
   databaseName?: string;
   type: 'table' | 'sql-editor';
   title: string;
+  sqlFilter?: string;
 }
 
 interface TableTabsProps {
@@ -149,6 +150,24 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
       databaseName,
       type: 'table',
       title: tableName
+    };
+
+    setTableTabs(prev => [...prev, newTab]);
+    setActiveTableTabId(newTab.id);
+  };
+
+  // Add a new linked table tab (for foreign key navigation)
+  const addLinkedTableTab = (tableName: string, filterColumn: string, filterValue: any, databaseName?: string) => {
+    // Create SQL filter for the linked table
+    const sqlFilter = `WHERE ${filterColumn} = ${typeof filterValue === 'string' ? `'${filterValue}'` : filterValue}`;
+    
+    const newTab: TableTab = {
+      id: `${activeTab?.id}-${tableName}-filtered-${Date.now()}`,
+      tableName,
+      databaseName,
+      type: 'table',
+      title: `${tableName} (filtered)`,
+      sqlFilter
     };
 
     setTableTabs(prev => [...prev, newTab]);
@@ -358,6 +377,10 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
               activeTab={activeTab}
               tableName={activeTableTab.tableName!}
               onBack={() => closeTableTab(activeTableTab.id)}
+              sqlFilter={activeTableTab.sqlFilter}
+              onForeignKeyClick={(targetTable, targetColumn, value) => {
+                addLinkedTableTab(targetTable, targetColumn, value);
+              }}
             />
           )
         ) : (

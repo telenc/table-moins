@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/20/solid';
 
 interface Column {
   key: string;
@@ -7,6 +8,17 @@ interface Column {
   minWidth?: number;
   sortable?: boolean;
   render?: (value: any, row: any, rowIndex: number) => React.ReactNode;
+}
+
+interface ForeignKeyRelation {
+  columnName: string;
+  targetTable: string;
+  targetColumn: string;
+}
+
+interface ReverseForeignKeyRelation {
+  columnName: string;
+  referencingTables: { table: string; column: string }[];
 }
 
 interface ResizableTableProps {
@@ -21,6 +33,10 @@ interface ResizableTableProps {
   onSort?: (columnKey: string, direction: 'asc' | 'desc') => void;
   className?: string;
   maxHeight?: string;
+  foreignKeys?: ForeignKeyRelation[];
+  onForeignKeyClick?: (targetTable: string, targetColumn: string, value: any) => void;
+  reverseForeignKeys?: ReverseForeignKeyRelation[];
+  onReverseForeignKeyClick?: (targetTable: string, targetColumn: string, value: any) => void;
 }
 
 export const ResizableTable: React.FC<ResizableTableProps> = ({
@@ -33,6 +49,10 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
   onSort,
   className = '',
   maxHeight = 'calc(100vh - 180px)',
+  foreignKeys = [],
+  onForeignKeyClick,
+  reverseForeignKeys = [],
+  onReverseForeignKeyClick,
 }) => {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{
@@ -176,6 +196,16 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
     return row[column.key];
   };
 
+  // Check if a column has a foreign key relation
+  const getForeignKeyRelation = (columnKey: string): ForeignKeyRelation | undefined => {
+    return foreignKeys.find(fk => fk.columnName === columnKey);
+  };
+
+  // Check if a column has reverse foreign key relations (is referenced by other tables)
+  const getReverseForeignKeyRelation = (columnKey: string): ReverseForeignKeyRelation | undefined => {
+    return reverseForeignKeys.find(rfk => rfk.columnName === columnKey);
+  };
+
   // Render cell content
   const renderCell = (row: any, column: Column, rowIndex: number) => {
     const value = getCellValue(row, column);
@@ -184,9 +214,64 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
       return column.render(value, row, rowIndex);
     }
 
-    // Default rendering
+    // Check for foreign key relations
+    const foreignKeyRelation = getForeignKeyRelation(column.key);
+    const reverseForeignKeyRelation = getReverseForeignKeyRelation(column.key);
+
+    // Default rendering for null/undefined values
     if (value === null || value === undefined) {
       return <span className="text-gray-400 italic">NULL</span>;
+    }
+
+    // Check if we need to show navigation icons
+    const hasForwardFK = foreignKeyRelation && onForeignKeyClick && value;
+    const hasReverseFK = reverseForeignKeyRelation && onReverseForeignKeyClick && value && reverseForeignKeyRelation.referencingTables.length > 0;
+
+    if (hasForwardFK || hasReverseFK) {
+      return (
+        <div className="flex items-center justify-between">
+          <div className="truncate flex-1" title={String(value)}>
+            {String(value)}
+          </div>
+          <div className="flex items-center gap-1">
+            {/* Forward foreign key (this table → target table) */}
+            {hasForwardFK && (
+              <button
+                className="text-blue-500 hover:text-blue-700 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onForeignKeyClick(
+                    foreignKeyRelation.targetTable,
+                    foreignKeyRelation.targetColumn,
+                    value
+                  );
+                }}
+                title={`Open ${foreignKeyRelation.targetTable} where ${foreignKeyRelation.targetColumn} = ${value}`}
+              >
+                <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+              </button>
+            )}
+            {/* Reverse foreign key (target tables → this table) */}
+            {hasReverseFK && reverseForeignKeyRelation.referencingTables.map((refTable, index) => (
+              <button
+                key={`${refTable.table}-${refTable.column}-${index}`}
+                className="text-green-600 hover:text-green-800 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReverseForeignKeyClick(
+                    refTable.table,
+                    refTable.column,
+                    value
+                  );
+                }}
+                title={`Open ${refTable.table} where ${refTable.column} = ${value}`}
+              >
+                <ArrowTopRightOnSquareIcon className="h-3 w-3 transform rotate-180" />
+              </button>
+            ))}
+          </div>
+        </div>
+      );
     }
 
     return (

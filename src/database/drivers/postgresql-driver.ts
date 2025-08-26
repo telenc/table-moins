@@ -1,6 +1,6 @@
 import { Pool, Client, PoolConfig } from 'pg';
 import { BaseDatabaseDriver } from './base-driver';
-import { DatabaseConnection, QueryResult, TableInfo, ColumnInfo, DatabaseInfo } from '../../shared/types/database';
+import { DatabaseConnection, QueryResult, TableInfo, ColumnInfo, DatabaseInfo, ForeignKeyInfo } from '../../shared/types/database';
 import { Logger } from '../../shared/utils/logger';
 
 const logger = new Logger('PostgreSQLDriver');
@@ -322,7 +322,9 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
           WHEN c.column_default LIKE 'nextval%' THEN true 
           ELSE false 
         END as is_auto_increment,
-        col_description(pgc.oid, c.ordinal_position) as comment
+        col_description(pgc.oid, c.ordinal_position) as comment,
+        fk.foreign_table,
+        fk.foreign_column
       FROM information_schema.columns c
       LEFT JOIN pg_class pgc ON pgc.relname = c.table_name
       LEFT JOIN (
@@ -332,9 +334,17 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
         WHERE tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
       ) pk ON pk.column_name = c.column_name
       LEFT JOIN (
-        SELECT ku.column_name
+        SELECT 
+          kcu.column_name,
+          ccu.table_name AS foreign_table,
+          ccu.column_name AS foreign_column
         FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
+        JOIN information_schema.key_column_usage kcu 
+          ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage ccu 
+          ON ccu.constraint_name = tc.constraint_name
+          AND ccu.table_schema = tc.table_schema
         WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
       ) fk ON fk.column_name = c.column_name
       LEFT JOIN (
@@ -349,20 +359,49 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
     `;
 
     const result = await this.executeQuery(query.replace(/\$1/g, this.escapeValue(tableName)));
-    return result.rows.map((row: any) => ({
-      name: row.name,
-      type: row.type,
-      length: row.length,
-      precision: row.precision,
-      scale: row.scale,
-      nullable: row.is_nullable === 'YES',
-      defaultValue: row.default_value,
-      isPrimaryKey: row.is_primary_key,
-      isForeignKey: row.is_foreign_key,
-      isUnique: row.is_unique,
-      isAutoIncrement: row.is_auto_increment,
-      comment: row.comment,
-    }));
+    
+    // Get reverse foreign keys (tables that reference this table)
+    const reverseForeignKeys = await this.getReverseForeignKeys(tableName);
+    
+    // Log foreign key information for debugging
+    const foreignKeys = result.rows.filter((row: any) => row.is_foreign_key);
+    if (foreignKeys.length > 0) {
+      logger.info(`Found ${foreignKeys.length} foreign keys in table ${tableName}:`, foreignKeys.map((fk: any) => ({
+        column: fk.name,
+        targetTable: fk.foreign_table,
+        targetColumn: fk.foreign_column
+      })));
+    } else {
+      logger.info(`No foreign keys found in table ${tableName}`);
+    }
+    
+    return result.rows.map((row: any) => {
+      // Find reverse foreign keys for this column
+      const referencedBy = reverseForeignKeys.filter(rfk => rfk.targetColumn === row.name);
+      
+      return {
+        name: row.name,
+        type: row.type,
+        length: row.length,
+        precision: row.precision,
+        scale: row.scale,
+        nullable: row.is_nullable === 'YES',
+        defaultValue: row.default_value,
+        isPrimaryKey: row.is_primary_key,
+        isForeignKey: row.is_foreign_key,
+        isUnique: row.is_unique,
+        isAutoIncrement: row.is_auto_increment,
+        comment: row.comment,
+        foreignKeyTable: row.foreign_table,
+        foreignKeyColumn: row.foreign_column,
+        // Reverse foreign keys
+        isReferencedByOtherTables: referencedBy.length > 0,
+        referencedByTables: referencedBy.map(rfk => ({
+          table: rfk.sourceTable,
+          column: rfk.sourceColumn
+        })),
+      };
+    });
   }
 
   /**
@@ -468,6 +507,104 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
       case 1700: return 'NUMERIC';
       default: return 'UNKNOWN';
     }
+  }
+
+  /**
+   * Récupère les clés étrangères d'une table
+   */
+  async getForeignKeys(tableName: string, schemaName: string = 'public'): Promise<ForeignKeyInfo[]> {
+    const query = `
+      SELECT
+        tc.constraint_name,
+        tc.table_schema AS source_schema,
+        tc.table_name AS source_table,
+        kcu.column_name AS source_column,
+        ccu.table_schema AS target_schema,
+        ccu.table_name AS target_table,
+        ccu.column_name AS target_column,
+        rc.delete_rule AS on_delete,
+        rc.update_rule AS on_update
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      JOIN information_schema.referential_constraints AS rc
+        ON rc.constraint_name = tc.constraint_name
+        AND rc.constraint_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_name = '${tableName}'
+        AND tc.table_schema = '${schemaName}'
+      ORDER BY tc.constraint_name, kcu.ordinal_position
+    `;
+
+    const result = await this.executeQuery(query);
+    return result.rows.map((row: any) => ({
+      constraintName: row.constraint_name,
+      sourceSchema: row.source_schema,
+      sourceTable: row.source_table,
+      sourceColumn: row.source_column,
+      targetSchema: row.target_schema,
+      targetTable: row.target_table,
+      targetColumn: row.target_column,
+      onDelete: row.on_delete,
+      onUpdate: row.on_update,
+    }));
+  }
+
+  /**
+   * Récupère les foreign keys inverses (tables qui référencent la table courante)
+   */
+  async getReverseForeignKeys(tableName: string, schemaName: string = 'public'): Promise<ForeignKeyInfo[]> {
+    const query = `
+      SELECT
+        tc.constraint_name,
+        tc.table_schema AS source_schema,
+        tc.table_name AS source_table,
+        kcu.column_name AS source_column,
+        ccu.table_schema AS target_schema,
+        ccu.table_name AS target_table,
+        ccu.column_name AS target_column,
+        rc.delete_rule AS on_delete,
+        rc.update_rule AS on_update
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      JOIN information_schema.referential_constraints AS rc
+        ON rc.constraint_name = tc.constraint_name
+        AND rc.constraint_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND ccu.table_name = '${tableName}'
+        AND ccu.table_schema = '${schemaName}'
+      ORDER BY tc.constraint_name, kcu.ordinal_position
+    `;
+
+    const result = await this.executeQuery(query);
+    
+    console.log(`[PostgreSQLDriver] Found ${result.rows.length} reverse foreign keys for table ${tableName}:`, 
+      result.rows.map(row => ({
+        from: `${row.source_table}.${row.source_column}`, 
+        to: `${row.target_table}.${row.target_column}`
+      }))
+    );
+    
+    return result.rows.map((row: any) => ({
+      constraintName: row.constraint_name,
+      sourceSchema: row.source_schema,
+      sourceTable: row.source_table,
+      sourceColumn: row.source_column,
+      targetSchema: row.target_schema,
+      targetTable: row.target_table,
+      targetColumn: row.target_column,
+      onDelete: row.on_delete,
+      onUpdate: row.on_update,
+    }));
   }
 
   /**
