@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TableMoins — A fast, friendly database GUI for teams</title>
+    <meta name="description"
+        content="TableMoins is a modern, lightweight GUI for relational databases. Browse, edit, and query your data with confidence. Free and open‑source." />
+    <link rel="icon" href="icon.png" type="image/png" />
+    <meta property="og:title" content="TableMoins — A fast, friendly database GUI" />
+    <meta property="og:description"
+        content="Modern, lightweight, and open‑source. Browse, edit, and query your databases with confidence." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="screenshot.jpg" />
+    <meta name="theme-color" content="#0B63F6" />
+
+    <style>
+        /* ----- Design tokens -------------------------------------------------- */
+        :root {
+            --bg: #ffffff;
+            --text: #101114;
+            --muted: #5b5f6a;
+            --line: #e6e8ee;
+            --brand: #0b63f6;
+            --brand-600: #094ecc;
+            --brand-50: #eef4ff;
+            --surface: #f7f8fb;
+            --shadow: 0 6px 24px rgba(16, 17, 20, 0.08);
+            --radius: 14px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0b0d12;
+                --text: #eef1f7;
+                --muted: #a3a8b6;
+                --line: #1d2230;
+                --brand: #5b8cff;
+                --brand-600: #7aa1ff;
+                --brand-50: #11172a;
+                --surface: #0f1420;
+                --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            }
+        }
+
+        /* ----- Base ----------------------------------------------------------- */
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font: 400 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+
+        a {
+            color: var(--brand);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .container {
+            width: min(1120px, 92vw);
+            margin-inline: auto;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .6rem;
+            border: 1px solid var(--brand);
+            background: var(--brand);
+            color: #fff;
+            padding: .9rem 1.1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: .2px;
+            transition: transform .15s ease, box-shadow .2s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .btn:hover {
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .btn.secondary {
+            background: transparent;
+            color: var(--brand);
+            box-shadow: none;
+        }
+
+        .btn.ghost {
+            background: transparent;
+            border-color: var(--line);
+            color: var(--text);
+        }
+
+        .badge {
+            font-size: .78rem;
+            padding: .35rem .6rem;
+            border-radius: 999px;
+            background: var(--brand-50);
+            color: var(--brand);
+            border: 1px solid var(--line);
+        }
+
+        /* ----- Skip link ------------------------------------------------------ */
+        .skip {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .skip:focus {
+            left: 16px;
+            top: 16px;
+            background: #000;
+            color: #fff;
+            padding: .5rem .8rem;
+            border-radius: 8px;
+            z-index: 9999;
+        }
+
+        /* ----- Header --------------------------------------------------------- */
+        header {
+            position: sticky;
+            top: 0;
+            background: color-mix(in oklab, var(--bg) 92%, transparent);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid var(--line);
+            z-index: 50;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.4rem 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            font-weight: 800;
+            letter-spacing: -.01em;
+            font-size: 1.1rem;
+            transition: transform .2s ease;
+        }
+
+        .brand:hover {
+            transform: translateY(-1px);
+            text-decoration: none;
+        }
+
+        .brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .nav ul {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            align-items: center;
+        }
+
+        .nav a {
+            color: var(--text);
+            opacity: .8;
+            font-weight: 500;
+            font-size: .95rem;
+            padding: .6rem 1rem;
+            border-radius: 8px;
+            transition: all .2s ease;
+        }
+
+        .nav a:hover {
+            opacity: 1;
+            background: var(--brand-50);
+            color: var(--brand-600);
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .nav .cta {
+            margin-left: .8rem;
+            padding: .8rem 1.4rem;
+            font-size: .9rem;
+        }
+
+        .menu-btn {
+            display: none;
+            background: transparent;
+            border: 0;
+            padding: .4rem;
+        }
+
+        .drawer {
+            display: none;
+        }
+
+        @media (max-width: 880px) {
+            .nav ul {
+                display: none;
+            }
+
+            .menu-btn {
+                display: inline-block;
+            }
+
+            .drawer {
+                display: block;
+                position: fixed;
+                inset: 0 0 0 35%;
+                background: var(--bg);
+                border-left: 1px solid var(--line);
+                box-shadow: var(--shadow);
+                transform: translateX(100%);
+                transition: transform .2s ease;
+                padding: 1.2rem;
+            }
+
+            .drawer.open {
+                transform: translateX(0);
+            }
+
+            .drawer a {
+                display: block;
+                padding: .9rem 0;
+                color: var(--text);
+                font-weight: 600;
+            }
+        }
+
+        /* ----- Hero ----------------------------------------------------------- */
+        .hero {
+            padding: 80px 0 32px;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.25fr 1fr;
+            gap: 36px;
+            align-items: center;
+        }
+
+        .eyebrow {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            margin-bottom: 12px;
+        }
+
+        .eyebrow .divider {
+            width: 1px;
+            height: 14px;
+            background: var(--line);
+        }
+
+        h1 {
+            font-size: clamp(32px, 6vw, 52px);
+            line-height: 1.12;
+            margin: 0 0 14px;
+            letter-spacing: -.02em;
+        }
+
+        .lead {
+            color: var(--muted);
+            font-size: 1.125rem;
+            margin-bottom: 24px;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: .8rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .meta {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: .95rem;
+        }
+
+        .hero-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero-card img {
+            border-radius: 10px;
+        }
+
+        /* ----- Logos ---------------------------------------------------------- */
+        .logos {
+            padding: 26px 0 10px;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .logos-row {
+            display: flex;
+            gap: clamp(18px, 6vw, 56px);
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            opacity: .8;
+        }
+
+        .logos-row img {
+            height: 28px;
+            filter: grayscale(100%);
+            opacity: .7;
+        }
+
+        /* ----- Sections ------------------------------------------------------- */
+        section {
+            padding: 72px 0;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 26px;
+        }
+
+        .section-head h2 {
+            font-size: clamp(26px, 4.5vw, 36px);
+            margin: 0;
+            letter-spacing: -.01em;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        /* Features */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+
+        .card h3 {
+            margin: 0 0 6px;
+            font-size: 1.05rem;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .kicker {
+            font-size: .8rem;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        @media (max-width: 960px) {
+            .features {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Platforms */
+        .platforms {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .platform {
+            padding: 28px 20px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            text-align: center;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            transition: all .2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .platform:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(16, 17, 20, 0.12);
+            border-color: var(--brand);
+        }
+
+        .platform-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            display: block;
+            filter: grayscale(20%);
+            transition: filter .2s ease;
+        }
+
+        .platform:hover .platform-icon {
+            filter: grayscale(0%);
+        }
+
+        .platform strong {
+            display: block;
+            margin: 8px 0 4px;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .platform .muted {
+            font-size: .9rem;
+            opacity: .8;
+        }
+
+        @media (max-width: 840px) {
+            .platforms {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Pricing */
+        .pricing {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            align-items: stretch;
+        }
+
+        .plan {
+            padding: 24px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        .price {
+            font-size: 42px;
+            font-weight: 800;
+            margin: 6px 0 2px;
+        }
+
+        .list {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0 0;
+            display: grid;
+            gap: 10px;
+        }
+
+        .list li {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .list svg {
+            flex: none;
+            margin-top: 3px;
+        }
+
+        @media (max-width: 980px) {
+            .pricing {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Footer */
+        footer {
+            padding: 56px 0 30px;
+            border-top: 1px solid var(--line);
+        }
+
+        .foot {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 22px;
+        }
+
+        .foot h4 {
+            margin: 0 0 10px;
+            font-size: .95rem;
+        }
+
+        .foot a {
+            color: var(--muted);
+        }
+
+        .copyright {
+            margin-top: 26px;
+            color: var(--muted);
+            font-size: .9rem;
+        }
+
+        @media (max-width: 920px) {
+            .foot {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* Small helpers */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <!-- Header -->
+    <header>
+        <nav class="container nav" aria-label="Primary">
+            <a class="brand" href="#" aria-label="TableMoins home">
+                <img src="icon.png" alt="TableMoins logo" />
+                <span>TableMoins</span>
+            </a>
+            <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#platforms">Platforms</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="https://github.com/telenc/table-moins/wiki">Docs</a></li>
+                <li><a class="btn cta" href="https://github.com/telenc/table-moins/releases">Download</a></li>
+            </ul>
+            <button class="menu-btn" aria-label="Open menu" aria-controls="drawer" aria-expanded="false"
+                onclick="toggleDrawer()">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+            </button>
+        </nav>
+        <div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Mobile navigation">
+            <a href="#features" onclick="toggleDrawer(false)">Features</a>
+            <a href="#platforms" onclick="toggleDrawer(false)">Platforms</a>
+            <a href="#pricing" onclick="toggleDrawer(false)">Pricing</a>
+            <a href="https://github.com/telenc/table-moins/wiki" onclick="toggleDrawer(false)">Docs</a>
+            <a class="btn" href="https://github.com/telenc/table-moins/releases">Download</a>
+        </div>
+    </header>
+
+    <main id="main">
+        <!-- Hero -->
+        <section class="hero container" aria-labelledby="hero-title">
+            <div class="hero-grid">
+                <div>
+                    <div class="eyebrow">
+                        <span class="badge">Open‑source</span>
+                        <span class="divider" aria-hidden="true"></span>
+                        <span class="muted">macOS • Windows • Linux</span>
+                    </div>
+                    <h1 id="hero-title">Database management you’ll actually enjoy using</h1>
+                    <p class="lead">TableMoins is a fast, minimal GUI for relational databases. Explore schemas, run
+                        queries with autocompletion, edit rows safely, and export results — without vendor lock‑in.</p>
+                    <div class="hero-cta">
+                        <a class="btn" href="https://github.com/telenc/table-moins/releases">Download for desktop</a>
+                        <a class="btn secondary" href="https://github.com/telenc/table-moins">View on GitHub</a>
+                    </div>
+                    <div class="meta" aria-label="Key facts">
+                        <span>MIT license</span>
+                        <span>•</span>
+                        <span>Native feel</span>
+                        <span>•</span>
+                        <span>No telemetry</span>
+                    </div>
+                </div>
+                <div class="hero-card" aria-hidden="true">
+                    <img src="screenshot.svg" alt="Screenshot of the TableMoins interface" />
+                </div>
+            </div>
+        </section>
+
+
+        <!-- Features -->
+        <section id="features" class="container">
+            <div class="section-head">
+                <h2>Everything you need. Nothing in your way.</h2>
+                <span class="kicker">Focus on your data, not the tool.</span>
+            </div>
+            <div class="features">
+                <article class="card">
+                    <h3>Multi‑database support</h3>
+                    <p>PostgreSQL support now, with MySQL/MariaDB and SQLite coming soon — built on a driver system designed for easy expansion.</p>
+                </article>
+                <article class="card">
+                    <h3>Safe inline editing</h3>
+                    <p>Edit cells with instant diff preview and built‑in safeguards. Undo/redo at the statement level.
+                    </p>
+                </article>
+                <article class="card">
+                    <h3>Smart query editor</h3>
+                    <p>Autocomplete, snippets, keyboard shortcuts, and a fast result grid that handles millions of rows.
+                    </p>
+                </article>
+                <article class="card">
+                    <h3>Secure by default</h3>
+                    <p>SSL/TLS connections, native keychain storage for credentials, and no outbound telemetry.</p>
+                </article>
+                <article class="card">
+                    <h3>Import & export</h3>
+                    <p>CSV, JSON, and SQL export. Stream large exports without blocking the UI.</p>
+                </article>
+                <article class="card">
+                    <h3>Open ecosystem</h3>
+                    <p>MIT‑licensed, scriptable, and extensible — built for teams who prefer open tools.</p>
+                </article>
+            </div>
+        </section>
+
+        <!-- Platforms -->
+        <section id="platforms" class="container">
+            <div class="section-head">
+                <h2>Run it anywhere</h2>
+                <span class="muted">First‑class desktop builds, same experience across platforms.</span>
+            </div>
+            <div class="platforms" role="list">
+                <div class="platform" role="listitem">
+                    <strong>macOS</strong>
+                    <span class="muted">Universal binary</span>
+                </div>
+                <div class="platform" role="listitem">
+                    <strong>Windows</strong>
+                    <span class="muted">x64 & ARM</span>
+                </div>
+                <div class="platform" role="listitem">
+                    <strong>Linux</strong>
+                    <span class="muted">AppImage</span>
+                </div>
+                <div class="platform" role="listitem">
+                    <strong>CLI tools</strong>
+                    <span class="muted">Export & migrate</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section id="pricing" class="container">
+            <div class="section-head">
+                <h2>Free and open-source</h2>
+                <span class="muted">Always free, no hidden costs or limitations.</span>
+            </div>
+            <div class="pricing" style="justify-content: center;">
+                <div class="plan" style="max-width: 500px; border-color: var(--brand); text-align: center;">
+                    <span class="badge" style="background: var(--brand); color: #fff;">Free Forever</span>
+                    <div class="price">€0</div>
+                    <p class="muted">Open‑source database management for everyone.</p>
+                    <ul class="list" aria-label="What's included">
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                            </svg> All features unlocked</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                            </svg> Community support on GitHub</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                            </svg> No telemetry or tracking</li>
+                        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                            </svg> MIT license</li>
+                    </ul>
+                    <p style="margin-top:16px">
+                        <a class="btn" href="https://github.com/telenc/table-moins/releases">Download</a>
+                        <a class="btn ghost" href="https://github.com/telenc/table-moins">GitHub</a>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="container" aria-label="Call to action">
+            <div class="card"
+                style="display:flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                <div>
+                    <h2 style="margin:0 0 6px">Ready to try TableMoins?</h2>
+                    <p class="muted" style="margin:0">Download the latest release and connect to your first database in
+                        minutes.</p>
+                </div>
+                <p style="margin:0; white-space: nowrap;">
+                    <a class="btn" href="https://github.com/telenc/table-moins/releases">Get the app</a>
+                    <a class="btn secondary" href="https://github.com/telenc/table-moins/wiki">Read the docs</a>
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container foot">
+            <div>
+                <a class="brand" href="#">
+                    <img src="icon.png" alt="" aria-hidden="true" />
+                    <span>TableMoins</span>
+                </a>
+                <p class="muted" style="margin:8px 0 0">Built with care in France. Open‑source under the MIT license.
+                </p>
+            </div>
+            <nav aria-label="Product">
+                <h4>Product</h4>
+                <a href="#features">Features</a><br />
+                <a href="#platforms">Platforms</a><br />
+                <a href="#pricing">Pricing</a><br />
+                <a href="https://github.com/telenc/table-moins/releases">Download</a>
+            </nav>
+            <nav aria-label="Resources">
+                <h4>Resources</h4>
+                <a href="https://github.com/telenc/table-moins/wiki">Docs</a><br />
+                <a href="https://github.com/telenc/table-moins/issues">Issues</a><br />
+                <a href="https://github.com/telenc/table-moins">GitHub</a>
+            </nav>
+
+        </div>
+        <div class="container copyright">© <span id="y"></span> TableMoins. All rights reserved.</div>
+    </footer>
+
+    <script>
+        // Current year
+        document.getElementById('y').textContent = new Date().getFullYear();
+
+        // Mobile drawer
+        function toggleDrawer(force) {
+            const el = document.getElementById('drawer');
+            const btn = document.querySelector('.menu-btn');
+            const open = force ?? !el.classList.contains('open');
+            el.classList.toggle('open', open);
+            btn.setAttribute('aria-expanded', String(open));
+            document.body.style.overflow = open ? 'hidden' : '';
+        }
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleDrawer(false); });
+
+        // Minimal download click tracking (no external analytics)
+        document.querySelectorAll('a[href*="/releases"]').forEach(a => {
+            a.addEventListener('click', () => {
+                try { window.localStorage.setItem('tm_last_download', Date.now().toString()); } catch { }
+            });
+        });
+    </script>
+</body>
+
+</html>
