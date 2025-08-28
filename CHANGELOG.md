@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2025-08-28
+
+### Added
+- Enter key support in filter panel for quick filter application
+- Multiple tabs can now be opened for the same table
+- Interactive changelog input in release script
+- Tooltip component for better UX
+
+### Fixed
+- Filter sharing issue between tabs - each tab now maintains independent filters
+- Tab management improved to allow multiple instances of same table
+
+### Changed
+- Enhanced tab management system with unique tab IDs
+- Improved release automation with automatic GitHub release creation
+
+## [0.2.3] - Previous Release
+
 ### Added
 - Multi-platform CI/CD with GitHub Actions
 - Professional GitHub Releases with downloadable assets
