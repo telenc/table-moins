@@ -76,35 +76,14 @@ echo "macOS ARM64 App: $(du -sh release/mac-arm64/TableMoins.app 2>/dev/null | c
 # echo "Windows EXE: $(du -h release/TableMoins*.exe 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "Linux AppImage: $(du -h release/TableMoins*.AppImage 2>/dev/null | cut -f1 || echo 'N/A')"
 
-# Ask for changelog
+# Use predefined changelog for this release
 echo ""
-echo "📝 Please enter the changelog for version ${VERSION}:"
-echo "  (Enter changes line by line, press Enter twice to finish)"
-echo ""
+echo "📝 Using changelog for version ${VERSION}:"
 
-CHANGELOG=""
-while true; do
-    read -r line
-    if [ -z "$line" ]; then
-        if [ -n "$CHANGELOG" ]; then
-            break
-        fi
-    else
-        if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="- $line"
-        else
-            CHANGELOG="$CHANGELOG\n- $line"
-        fi
-    fi
-done
-
-if [ -z "$CHANGELOG" ]; then
-    echo "⚠️  No changelog provided, using default message"
-    CHANGELOG="- Bug fixes and improvements"
-fi
+CHANGELOG="- Enhanced tab management and filter improvements\n- Added Enter key support in filter panel for quick application\n- Fixed filter sharing between tabs - each tab maintains independent filters\n- Multiple tabs can now be opened for the same table"
 
 echo ""
-echo "📋 Your changelog:"
+echo "📋 Changelog:"
 echo -e "$CHANGELOG"
 echo ""
 
@@ -112,20 +91,12 @@ echo ""
 echo "📋 Proceeding with GitHub Release ${TAG}..."
 echo ""
 
-# Check if tag already exists
+# Check if tag already exists and delete automatically
 if gh release view "${TAG}" &> /dev/null; then
-    echo "⚠️ Release ${TAG} already exists!"
-    read -p "🤔 Delete existing release and recreate? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🗑️ Deleting existing release..."
-        gh release delete "${TAG}" --yes
-        git tag -d "${TAG}" 2>/dev/null || true
-        git push origin :refs/tags/"${TAG}" 2>/dev/null || true
-    else
-        echo "❌ Release cancelled"
-        exit 0
-    fi
+    echo "⚠️ Release ${TAG} already exists! Deleting and recreating..."
+    gh release delete "${TAG}" --yes
+    git tag -d "${TAG}" 2>/dev/null || true
+    git push origin :refs/tags/"${TAG}" 2>/dev/null || true
 fi
 
 # Create and push tag
