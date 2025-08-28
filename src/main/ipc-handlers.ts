@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow, dialog, app } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { Logger } from '../shared/utils/logger';
@@ -417,6 +418,37 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     }
   });
 
+  // Mettre à jour des données dans une table
+  ipcMain.handle('database:update-table-data', async (_, connectionId: string, tableName: string, updates: Array<{
+    whereClause: { [columnName: string]: any };
+    setClause: { [columnName: string]: any };
+  }>) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion non trouvée ou non active');
+      }
+      
+      // Vérifier si le driver supporte les updates (PostgreSQL pour l'instant)
+      if (!('updateTableData' in driver) || typeof (driver as any).updateTableData !== 'function') {
+        throw new Error('Les mises à jour ne sont pas supportées pour ce type de base de données');
+      }
+      
+      logger.info(`Mise à jour de la table ${tableName} avec ${updates.length} modifications`);
+      const result = await (driver as any).updateTableData(tableName, updates);
+      logger.info(`Mise à jour terminée: ${result.updatedRows} lignes mises à jour`);
+      
+      return result;
+    } catch (error) {
+      logger.error(`Erreur lors de la mise à jour des données pour ${connectionId}.${tableName}:`, error as Error);
+      return {
+        success: false,
+        updatedRows: 0,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
   // === Gestionnaires pour les fichiers SQL ===
   
   // Ouvrir un fichier SQL
@@ -726,5 +758,71 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     }
   });
 
-  logger.info('Gestionnaires IPC configurés');
+  // === Gestionnaires pour l'auto-update ===
+  
+  // Vérifier les mises à jour manuellement
+  ipcMain.handle('updater:check-for-updates', async () => {
+    try {
+      logger.info('Manual check for updates requested');
+      const result = await autoUpdater.checkForUpdates();
+      return {
+        success: true,
+        updateInfo: result?.updateInfo || null
+      };
+    } catch (error) {
+      logger.error('Error checking for updates:', error as Error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
+  // Télécharger et installer la mise à jour
+  ipcMain.handle('updater:download-and-install', async () => {
+    try {
+      logger.info('Manual update download and install requested');
+      await autoUpdater.downloadUpdate();
+      return { success: true };
+    } catch (error) {
+      logger.error('Error downloading update:', error as Error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
+  // Redémarrer et installer la mise à jour
+  ipcMain.handle('updater:restart-and-install', () => {
+    try {
+      logger.info('Restarting to install update');
+      autoUpdater.quitAndInstall();
+      return { success: true };
+    } catch (error) {
+      logger.error('Error restarting for update:', error as Error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
+  // Obtenir la version actuelle
+  ipcMain.handle('updater:get-version', () => {
+    try {
+      return {
+        success: true,
+        version: app.getVersion()
+      };
+    } catch (error) {
+      logger.error('Error getting app version:', error as Error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
+  logger.info('Gestionnaires IPC configurés (avec auto-update)');
 }

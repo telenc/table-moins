@@ -223,6 +223,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       type="text"
                       value={condition.value}
                       onChange={(e) => updateCondition(condition.id, 'value', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleApply();
+                        }
+                      }}
                       placeholder="value"
                       className="border border-gray-300 rounded px-1 py-0.5 text-xs font-mono w-20"
                       style={{ fontFamily: 'Menlo, Monaco, "Courier New", monospace' }}
@@ -255,6 +260,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               type="text"
               value={rawSQL}
               onChange={(e) => setRawSQL(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleApply();
+                }
+              }}
               placeholder="column = 'value' AND other_column > 100"
               className="w-full border border-gray-300 rounded px-2 py-0.5 text-xs font-mono"
               style={{ fontFamily: 'Menlo, Monaco, "Courier New", monospace' }}

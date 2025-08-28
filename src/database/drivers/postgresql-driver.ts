@@ -628,4 +628,83 @@ export class PostgreSQLDriver extends BaseDatabaseDriver {
     
     return String(value);
   }
+
+  /**
+   * Met à jour des données dans une table
+   * @param tableName Nom de la table
+   * @param updates Array des modifications à apporter
+   * @returns Résultat de l'opération
+   */
+  async updateTableData(tableName: string, updates: Array<{
+    whereClause: { [columnName: string]: any };
+    setClause: { [columnName: string]: any };
+  }>): Promise<{ success: boolean; updatedRows: number; error?: string }> {
+    if (!this.pool) {
+      throw new Error('Base de données non connectée');
+    }
+
+    const client = await this.pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      let totalUpdatedRows = 0;
+      
+      for (const update of updates) {
+        // Construction de la clause SET
+        const setEntries = Object.entries(update.setClause);
+        const setParts = setEntries.map(([column, _], index) => 
+          `${this.escapeIdentifier(column)} = $${index + 1}`
+        );
+        
+        // Construction de la clause WHERE
+        const whereEntries = Object.entries(update.whereClause);
+        const whereParts = whereEntries.map(([column, _], index) => 
+          `${this.escapeIdentifier(column)} = $${setEntries.length + index + 1}`
+        );
+        
+        // Paramètres pour la requête préparée
+        const queryParams = [
+          ...setEntries.map(([_, value]) => value),
+          ...whereEntries.map(([_, value]) => value)
+        ];
+        
+        // Construction de la requête SQL
+        const query = `
+          UPDATE ${this.escapeIdentifier(tableName)} 
+          SET ${setParts.join(', ')} 
+          WHERE ${whereParts.join(' AND ')}
+        `;
+        
+        logger.info(`Executing UPDATE query: ${query}`, { params: queryParams });
+        
+        const result = await client.query(query, queryParams);
+        totalUpdatedRows += result.rowCount || 0;
+        
+        logger.info(`Updated ${result.rowCount} rows for table ${tableName}`);
+      }
+      
+      await client.query('COMMIT');
+      
+      logger.info(`Successfully updated ${totalUpdatedRows} total rows in table ${tableName}`);
+      
+      return {
+        success: true,
+        updatedRows: totalUpdatedRows
+      };
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('Error updating table data:', error as Error);
+      
+      return {
+        success: false,
+        updatedRows: 0,
+        error: (error as Error).message
+      };
+      
+    } finally {
+      client.release();
+    }
+  }
 }

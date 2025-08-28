@@ -71,19 +71,46 @@ ls -lah release/
 
 echo ""
 echo "📊 File sizes:"
-echo "macOS ARM64 DMG: $(du -h release/TableMoins-${VERSION}-arm64.dmg 2>/dev/null | cut -f1 || echo 'N/A')"
+echo "macOS ARM64 App: $(du -sh release/mac-arm64/TableMoins.app 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "macOS Intel DMG: $(du -h release/TableMoins-${VERSION}.dmg 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "Windows EXE: $(du -h release/TableMoins*.exe 2>/dev/null | cut -f1 || echo 'N/A')"
 # echo "Linux AppImage: $(du -h release/TableMoins*.AppImage 2>/dev/null | cut -f1 || echo 'N/A')"
 
-# Ask for confirmation before creating release
+# Ask for changelog
 echo ""
-read -p "🤔 Create GitHub Release ${TAG}? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Release cancelled"
-    exit 0
+echo "📝 Please enter the changelog for version ${VERSION}:"
+echo "  (Enter changes line by line, press Enter twice to finish)"
+echo ""
+
+CHANGELOG=""
+while true; do
+    read -r line
+    if [ -z "$line" ]; then
+        if [ -n "$CHANGELOG" ]; then
+            break
+        fi
+    else
+        if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="- $line"
+        else
+            CHANGELOG="$CHANGELOG\n- $line"
+        fi
+    fi
+done
+
+if [ -z "$CHANGELOG" ]; then
+    echo "⚠️  No changelog provided, using default message"
+    CHANGELOG="- Bug fixes and improvements"
 fi
+
+echo ""
+echo "📋 Your changelog:"
+echo -e "$CHANGELOG"
+echo ""
+
+# Automatically proceed with release creation
+echo "📋 Proceeding with GitHub Release ${TAG}..."
+echo ""
 
 # Check if tag already exists
 if gh release view "${TAG}" &> /dev/null; then
@@ -120,13 +147,14 @@ Modern desktop application for SQL database management - TablePlus clone
 Choose the appropriate file for your operating system:
 
 - **macOS Apple Silicon**: \`TableMoins-${VERSION}-arm64.dmg\`
-# - **macOS Intel**: \`TableMoins-${VERSION}.dmg\` 
-# - **Windows**: \`TableMoins Setup ${VERSION}.exe\`
-# - **Linux**: \`TableMoins-${VERSION}.AppImage\`
 
 ### ✨ What's New
 
-See the [CHANGELOG](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/CHANGELOG.md) for detailed changes.
+${CHANGELOG}
+
+---
+
+_See the [full changelog](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/CHANGELOG.md) for all changes._
 
 ### 🛠️ Installation
 
@@ -134,15 +162,6 @@ See the [CHANGELOG](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/CHAN
 - Download the appropriate .dmg file for your processor
 - Open the .dmg and drag TableMoins to Applications
 - **Signed with Apple Developer ID** - no more quarantine issues! 🎉
-
-# **Windows**: 
-# - Download and run the .exe installer
-# - Choose installation location and follow the wizard
-
-# **Linux**: 
-# - Download the .AppImage file
-# - Make executable: \`chmod +x TableMoins-${VERSION}.AppImage\`
-# - Run: \`./TableMoins-${VERSION}.AppImage\`
 
 ### 🔐 Security
 
@@ -161,7 +180,8 @@ gh release create "${TAG}" \
     --title "📦 TableMoins ${VERSION}" \
     --notes "${RELEASE_NOTES}" \
     release/TableMoins-${VERSION}-arm64.dmg \
-    release/TableMoins*-arm64-mac.zip
+    release/TableMoins*-arm64-mac.zip \
+    release/latest-mac.yml
     # release/TableMoins*.exe \
     # release/TableMoins*.AppImage \
     # release/TableMoins*.msi
@@ -171,14 +191,5 @@ echo "🎉 Release created successfully!"
 echo "🔗 View at: https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/${TAG}"
 echo ""
 
-# Test the signed macOS app
-if [ -d "release/mac-arm64/TableMoins.app" ]; then
-    read -p "🧪 Test the signed macOS app? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🚀 Opening TableMoins..."
-        open release/mac-arm64/TableMoins.app
-    fi
-fi
 
 echo "✅ Complete release process finished!"

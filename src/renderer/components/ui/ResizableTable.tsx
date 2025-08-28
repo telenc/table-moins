@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowTopRightOnSquareIcon } from '@heroicons/react/20/solid';
+import { ArrowTopRightOnSquareIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/20/solid';
 
 interface Column {
   key: string;
@@ -31,6 +31,8 @@ interface ResizableTableProps {
     editing: { rowIndex: number; columnKey: string; value: string } | null
   ) => void;
   onSort?: (columnKey: string, direction: 'asc' | 'desc') => void;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
   className?: string;
   maxHeight?: string;
   foreignKeys?: ForeignKeyRelation[];
@@ -47,6 +49,8 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
   editingCell,
   onEditingChange,
   onSort,
+  sortColumn,
+  sortDirection,
   className = '',
   maxHeight = 'calc(100vh - 180px)',
   foreignKeys = [],
@@ -159,6 +163,40 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
     setContextMenu({ show: false, x: 0, y: 0, columnKey: '' });
   };
 
+  // Handle column click for sorting
+  const handleColumnClick = (columnKey: string) => {
+    if (!onSort) return;
+
+    // Cycle through sort states: unsorted -> asc -> desc -> unsorted
+    if (sortColumn !== columnKey) {
+      // Different column clicked, start with ascending
+      onSort(columnKey, 'asc');
+    } else if (sortDirection === 'asc') {
+      // Same column, currently ascending, switch to descending
+      onSort(columnKey, 'desc');
+    } else if (sortDirection === 'desc') {
+      // Same column, currently descending, remove sort
+      // We'll need to handle this in the parent component
+      onSort('', 'asc'); // Empty string to indicate no sort
+    } else {
+      // Fallback, start with ascending
+      onSort(columnKey, 'asc');
+    }
+  };
+
+  // Get sort icon for column
+  const getSortIcon = (columnKey: string) => {
+    if (sortColumn !== columnKey) return null;
+    
+    if (sortDirection === 'asc') {
+      return <ChevronUpIcon className="h-3 w-3 text-blue-600" />;
+    } else if (sortDirection === 'desc') {
+      return <ChevronDownIcon className="h-3 w-3 text-blue-600" />;
+    }
+    
+    return null;
+  };
+
   // Handle cell double click
   const handleCellDoubleClick = (rowIndex: number, columnKey: string) => {
     if (onCellDoubleClick) {
@@ -209,6 +247,7 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
   // Render cell content
   const renderCell = (row: any, column: Column, rowIndex: number) => {
     const value = getCellValue(row, column);
+
 
     if (column.render) {
       return column.render(value, row, rowIndex);
@@ -299,7 +338,14 @@ export const ResizableTable: React.FC<ResizableTableProps> = ({
                 style={{ width: columnWidths[column.key] || column.width || 150 }}
                 onContextMenu={e => handleHeaderRightClick(e, column.key)}
               >
-                <div className="truncate pr-2">{column.title}</div>
+                <div 
+                  className="truncate pr-2 cursor-pointer select-none flex items-center gap-1 hover:text-blue-600 transition-colors"
+                  onClick={() => handleColumnClick(column.key)}
+                  title="Click to sort"
+                >
+                  <span>{column.title}</span>
+                  {getSortIcon(column.key)}
+                </div>
                 {/* Resize handle */}
                 <div
                   className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-blue-300 transition-colors"

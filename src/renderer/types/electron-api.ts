@@ -24,6 +24,14 @@ export interface ElectronAPI {
     getColumns: (connectionId: string, tableName: string, database?: string) => Promise<any[]>;
     executeQuery: (connectionId: string, query: string) => Promise<any>;
     getTableData: (connectionId: string, tableName: string, options?: any) => Promise<any>;
+    updateTableData: (
+      connectionId: string, 
+      tableName: string, 
+      updates: Array<{
+        whereClause: { [columnName: string]: any };
+        setClause: { [columnName: string]: any };
+      }>
+    ) => Promise<{ success: boolean; updatedRows: number; error?: string }>;
   };
   
   // App lifecycle
@@ -43,6 +51,40 @@ export interface ElectronAPI {
     writeFile: (path: string, content: string) => Promise<void>;
     readFile: (path: string) => Promise<string>;
   };
+  
+  // Auto-updater
+  updater: {
+    checkForUpdates: () => Promise<{ success: boolean; updateInfo?: any; error?: string; }>;
+    downloadAndInstall: () => Promise<{ success: boolean; error?: string; }>;
+    restartAndInstall: () => Promise<{ success: boolean; error?: string; }>;
+    getVersion: () => Promise<{ success: boolean; version?: string; error?: string; }>;
+    onUpdateAvailable: (callback: (info: UpdateInfo) => void) => void;
+    onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => void;
+    onUpdateProgress: (callback: (progress: UpdateProgress) => void) => void;
+    onUpdateError: (callback: (error: string) => void) => void;
+    removeUpdateListeners: () => void;
+  };
+}
+
+// Types pour les événements d'auto-update
+export interface UpdateInfo {
+  version: string;
+  files: Array<{
+    url: string;
+    sha512: string;
+    size: number;
+  }>;
+  releaseName?: string;
+  releaseNotes?: string;
+  releaseDate: string;
+  stagingPercentage?: number;
+}
+
+export interface UpdateProgress {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
 }
 
 // Window interface declaration is in preload.ts

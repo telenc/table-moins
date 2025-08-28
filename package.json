@@ -1,6 +1,6 @@
 {
   "name": "table-moins",
-  "version": "0.1.7",
+  "version": "0.2.4",
   "description": "Modern desktop application for SQL database management - TablePlus clone",
   "main": "dist/main/main/main.js",
   "author": {
@@ -89,6 +89,7 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.1",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.540.0",
     "mysql2": "^3.6.5",
     "pg": "^8.11.3",

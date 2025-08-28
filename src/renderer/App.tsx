@@ -27,11 +27,9 @@ import { useTabsStore } from './stores/tabs-store';
 import { TabConnection } from '../database/connection-service';
 import { DatabaseExplorer } from './components/database/DatabaseExplorer';
 import { TableTabs, TableTabsRef } from './components/database/TableTabs';
-import {
-  parseConnectionUrl,
-  isConnectionUrl,
-} from './utils/connection-url-parser';
+import { parseConnectionUrl, isConnectionUrl } from './utils/connection-url-parser';
 import { toast } from 'sonner';
+import { UpdateNotification } from './components/ui/UpdateNotification';
 import type {
   DatabaseConnection,
   ConnectionFormData,
@@ -39,9 +37,9 @@ import type {
 } from './types/connections';
 
 export const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'welcome' | 'connections' | 'new-connection' | 'database'>(
-    'connections'
-  );
+  const [currentView, setCurrentView] = useState<
+    'welcome' | 'connections' | 'new-connection' | 'database'
+  >('connections');
   const { tabs, activeTabId, addTab, setActiveTab, removeTab } = useTabsStore();
   const [currentActiveTab, setCurrentActiveTab] = useState<TabConnection | null>(null);
   const tabSystemRef = useRef<TabSystemRef>(null);
@@ -232,7 +230,7 @@ export const App: React.FC = () => {
     try {
       // Récupérer la connexion avec le mot de passe déchiffré
       const connectionForEdit = await window.electronAPI.connections.getForEdit(connection.id);
-      
+
       if (connectionForEdit) {
         setConnectionForm({
           name: connectionForEdit.name,
@@ -566,9 +564,7 @@ export const App: React.FC = () => {
               <div className="text-center text-gray-500">
                 <Server className="h-16 w-16 mx-auto mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium mb-2">No connections configured</h3>
-                <p className="text-sm mb-4">
-                  Start by adding a connection to your database.
-                </p>
+                <p className="text-sm mb-4">Start by adding a connection to your database.</p>
                 <Button
                   onClick={() => {
                     resetForm();
@@ -601,37 +597,37 @@ export const App: React.FC = () => {
                   onDoubleClick={async () => {
                     try {
                       const tabId = await window.electronAPI.connections.connect(connection.id);
-                      
+
                       // Créer l'onglet d'abord
                       const newTab: TabConnection = {
                         id: tabId,
                         connectionId: connection.id,
                         connection,
-                        isConnected: false
+                        isConnected: false,
                       };
-                      
+
                       addTab(newTab);
                       setActiveTab(tabId);
-                      
+
                       // Ensuite connecter automatiquement
                       try {
                         await window.electronAPI.tabs.connect(tabId);
-                        
+
                         // Mettre à jour l'état de connexion
                         const updatedTab = {
                           ...newTab,
-                          isConnected: true
+                          isConnected: true,
                         };
-                        
+
                         // Mettre à jour le tab dans le store
                         useTabsStore.getState().updateTab(tabId, updatedTab);
-                        
+
                         toast.success(`Connected to ${connection.name}`);
                       } catch (connectError) {
                         console.error('Error connecting to database:', connectError);
                         toast.warning(`Tab created but could not connect to ${connection.name}`);
                       }
-                      
+
                       if (tabSystemRef.current) {
                         await tabSystemRef.current.reloadTabs();
                       }
@@ -640,33 +636,35 @@ export const App: React.FC = () => {
                       toast.error(`Failed to create tab for ${connection.name}`);
                     }
                   }}
-                  onContextMenu={(e) => {
+                  onContextMenu={e => {
                     e.preventDefault();
                     const menu = document.createElement('div');
                     menu.className = 'fixed bg-white border rounded-lg shadow-lg z-50 min-w-32';
                     menu.style.left = e.pageX + 'px';
                     menu.style.top = e.pageY + 'px';
-                    
+
                     const editBtn = document.createElement('div');
-                    editBtn.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center gap-2';
+                    editBtn.className =
+                      'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center gap-2';
                     editBtn.innerHTML = '<span>✏️</span>Edit';
                     editBtn.onclick = () => {
                       handleEditConnection(connection);
                       document.body.removeChild(menu);
                     };
-                    
+
                     const deleteBtn = document.createElement('div');
-                    deleteBtn.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center gap-2 text-red-600';
+                    deleteBtn.className =
+                      'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center gap-2 text-red-600';
                     deleteBtn.innerHTML = '<span>🗑️</span>Delete';
                     deleteBtn.onclick = () => {
                       handleDeleteConnection(connection.id);
                       document.body.removeChild(menu);
                     };
-                    
+
                     menu.appendChild(editBtn);
                     menu.appendChild(deleteBtn);
                     document.body.appendChild(menu);
-                    
+
                     const closeMenu = () => {
                       if (document.body.contains(menu)) {
                         document.body.removeChild(menu);
@@ -679,14 +677,15 @@ export const App: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded flex items-center justify-center">
                       {connection.type === 'postgresql' && (
-                        <img 
-                          src="/assets/postgress.jpg" 
+                        <img
+                          src="/assets/postgress.jpg"
                           alt="PostgreSQL"
                           className="w-6 h-6 rounded object-cover"
-                          onError={(e) => {
+                          onError={e => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
-                            target.parentElement!.innerHTML = '<div class="w-6 h-6 rounded bg-blue-500 flex items-center justify-center text-white text-xs font-bold">PG</div>';
+                            target.parentElement!.innerHTML =
+                              '<div class="w-6 h-6 rounded bg-blue-500 flex items-center justify-center text-white text-xs font-bold">PG</div>';
                           }}
                         />
                       )}
@@ -703,7 +702,9 @@ export const App: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900 truncate">{connection.name}</span>
+                        <span className="font-medium text-gray-900 truncate">
+                          {connection.name}
+                        </span>
                       </div>
                       <div className="text-sm text-gray-500 truncate">
                         {connection.host}:{connection.port}
@@ -720,18 +721,15 @@ export const App: React.FC = () => {
       return (
         <div className="flex-1 flex h-full">
           <div className="w-64 border-r bg-white flex flex-col h-full">
-            <DatabaseExplorer 
+            <DatabaseExplorer
               activeTab={currentActiveTab}
               onTableSelect={() => {}}
               onQuerySelect={handleQuerySelect}
             />
           </div>
-          
+
           <div className="flex-1 min-w-0">
-            <TableTabs
-              ref={tableTabsRef}
-              activeTab={currentActiveTab}
-            />
+            <TableTabs ref={tableTabsRef} activeTab={currentActiveTab} />
           </div>
         </div>
       );
@@ -764,7 +762,6 @@ export const App: React.FC = () => {
           Connections
         </button>
 
-
         {/* Database tabs on the right */}
         <div className="flex-1 flex overflow-x-auto">
           {tabs.map(tab => (
@@ -784,14 +781,15 @@ export const App: React.FC = () => {
               >
                 <div className="w-3 h-3 rounded flex items-center justify-center">
                   {tab.connection.type === 'postgresql' && (
-                    <img 
-                      src="/assets/postgress.jpg" 
+                    <img
+                      src="/assets/postgress.jpg"
                       alt="PostgreSQL"
                       className="w-3 h-3 rounded object-cover"
-                      onError={(e) => {
+                      onError={e => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
-                        target.parentElement!.innerHTML = '<div class="w-3 h-3 rounded bg-blue-500 flex items-center justify-center text-white text-xs font-bold">P</div>';
+                        target.parentElement!.innerHTML =
+                          '<div class="w-3 h-3 rounded bg-blue-500 flex items-center justify-center text-white text-xs font-bold">P</div>';
                       }}
                     />
                   )}
@@ -808,24 +806,24 @@ export const App: React.FC = () => {
                 </div>
                 <span className="truncate max-w-32">{tab.connection.name}</span>
               </button>
-              
+
               {/* Close button - separate from main button */}
               <button
                 className="mr-2 p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-600 transition-all duration-200 ease-in-out transform hover:scale-110"
-                onClick={async (e) => {
+                onClick={async e => {
                   e.stopPropagation();
                   try {
                     await window.electronAPI.tabs.close(tab.id);
-                    
+
                     // Supprimer l'onglet du store local
                     removeTab(tab.id);
-                    
+
                     // Si c'était l'onglet actif, retourner aux connexions
                     if (activeTabId === tab.id) {
                       setActiveTab(null);
                       setCurrentView('connections');
                     }
-                    
+
                     // Recharger les onglets pour synchroniser avec le backend
                     if (tabSystemRef.current) {
                       await tabSystemRef.current.reloadTabs();
@@ -856,18 +854,15 @@ export const App: React.FC = () => {
       </div>
 
       {/* Hidden TabSystem for backend synchronization */}
-      <TabSystem
-        ref={tabSystemRef}
-        onTabChange={handleTabChange}
-        hideUI={true}
-      />
+      <TabSystem ref={tabSystemRef} onTabChange={handleTabChange} hideUI={true} />
 
       {/* Main content area */}
       <div className="flex-1 transition-all duration-300 ease-in-out overflow-hidden">
-        <div className="animate-fadeIn h-full">
-          {renderMainContent()}
-        </div>
+        <div className="animate-fadeIn h-full">{renderMainContent()}</div>
       </div>
+
+      {/* Auto-updater notification */}
+      <UpdateNotification currentView={currentView} />
     </div>
   );
 };

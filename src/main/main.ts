@@ -7,6 +7,7 @@ config({ path: join(__dirname, '../../.env') });
 
 
 import { app, BrowserWindow, Menu } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { isDev } from '../shared/utils/environment';
 import { createMenu } from './menu';
 import { setupIpcHandlers } from './ipc-handlers';
@@ -22,6 +23,7 @@ class TableMoinsApp {
   constructor() {
     this.setupAppEvents();
     this.setupSecurityPolicies();
+    this.setupAutoUpdater();
   }
 
   private setupAppEvents(): void {
@@ -169,6 +171,64 @@ class TableMoinsApp {
       default:
         return join(iconPath, 'icon.png');
     }
+  }
+
+  /**
+   * Configure l'auto-updater pour les mises à jour automatiques
+   */
+  private setupAutoUpdater(): void {
+    // Ne pas activer l'auto-update en mode développement
+    if (isDev) {
+      logger.info('Auto-updater disabled in development mode');
+      return;
+    }
+
+    // Configuration de l'auto-updater
+    autoUpdater.checkForUpdatesAndNotify();
+    
+    // Logs pour le debugging
+    autoUpdater.logger = logger;
+
+    // Événements de l'auto-updater
+    autoUpdater.on('checking-for-update', () => {
+      logger.info('Checking for update...');
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      logger.info('Update available:', info);
+      // Envoyer à l'interface utilisateur
+      this.mainWindow?.webContents.send('update-available', info);
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      logger.info('Update not available:', info);
+    });
+
+    autoUpdater.on('error', (error) => {
+      logger.error('Error in auto-updater:', error);
+      // Envoyer l'erreur à l'interface utilisateur
+      this.mainWindow?.webContents.send('update-error', error.message);
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
+      logger.info(message);
+      // Envoyer le progrès à l'interface utilisateur
+      this.mainWindow?.webContents.send('update-progress', progressObj);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      logger.info('Update downloaded:', info);
+      // Envoyer à l'interface utilisateur pour demander redémarrage
+      this.mainWindow?.webContents.send('update-downloaded', info);
+    });
+
+    // Vérifier les mises à jour toutes les heures
+    setInterval(() => {
+      if (!isDev) {
+        autoUpdater.checkForUpdatesAndNotify();
+      }
+    }, 60 * 60 * 1000); // 1 heure
   }
 }
 

@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getColumns: (connectionId: string, tableName: string, database?: string) => ipcRenderer.invoke('database:get-columns', connectionId, tableName, database),
     executeQuery: (connectionId: string, query: string) => ipcRenderer.invoke('database:execute-query', connectionId, query),
     getTableData: (connectionId: string, tableName: string, options?: any) => ipcRenderer.invoke('database:get-table-data', connectionId, tableName, options),
+    updateTableData: (connectionId: string, tableName: string, updates: Array<{
+      whereClause: { [columnName: string]: any };
+      setClause: { [columnName: string]: any };
+    }>) => ipcRenderer.invoke('database:update-table-data', connectionId, tableName, updates),
   },
   
   // SQL file operations
@@ -89,6 +93,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remove menu action listener
   removeMenuActionListener: () => {
     ipcRenderer.removeAllListeners('menu-action');
+  },
+  
+  // Auto-updater methods
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke('updater:check-for-updates'),
+    downloadAndInstall: () => ipcRenderer.invoke('updater:download-and-install'),
+    restartAndInstall: () => ipcRenderer.invoke('updater:restart-and-install'),
+    getVersion: () => ipcRenderer.invoke('updater:get-version'),
+    
+    // Event listeners for update events
+    onUpdateAvailable: (callback: (info: any) => void) => {
+      ipcRenderer.on('update-available', (_, info) => callback(info));
+    },
+    onUpdateDownloaded: (callback: (info: any) => void) => {
+      ipcRenderer.on('update-downloaded', (_, info) => callback(info));
+    },
+    onUpdateProgress: (callback: (progress: any) => void) => {
+      ipcRenderer.on('update-progress', (_, progress) => callback(progress));
+    },
+    onUpdateError: (callback: (error: string) => void) => {
+      ipcRenderer.on('update-error', (_, error) => callback(error));
+    },
+    
+    // Remove update listeners
+    removeUpdateListeners: () => {
+      ipcRenderer.removeAllListeners('update-available');
+      ipcRenderer.removeAllListeners('update-downloaded');
+      ipcRenderer.removeAllListeners('update-progress');
+      ipcRenderer.removeAllListeners('update-error');
+    }
   }
 });
 
@@ -142,6 +176,17 @@ declare global {
         open: () => Promise<{ canceled: boolean; filePath?: string; fileName?: string; content?: string; }>;
         save: (filePath: string | null, content: string, fileName?: string) => Promise<{ canceled: boolean; filePath?: string; fileName?: string; }>;
         saveAs: (content: string, fileName?: string) => Promise<{ canceled: boolean; filePath?: string; fileName?: string; }>;
+      };
+      updater: {
+        checkForUpdates: () => Promise<{ success: boolean; updateInfo?: any; error?: string; }>;
+        downloadAndInstall: () => Promise<{ success: boolean; error?: string; }>;
+        restartAndInstall: () => Promise<{ success: boolean; error?: string; }>;
+        getVersion: () => Promise<{ success: boolean; version?: string; error?: string; }>;
+        onUpdateAvailable: (callback: (info: any) => void) => void;
+        onUpdateDownloaded: (callback: (info: any) => void) => void;
+        onUpdateProgress: (callback: (progress: any) => void) => void;
+        onUpdateError: (callback: (error: string) => void) => void;
+        removeUpdateListeners: () => void;
       };
     };
     electron: {

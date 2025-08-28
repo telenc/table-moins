@@ -137,13 +137,7 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
 
   // Add a new table tab
   const addTableTab = (tableName: string, databaseName?: string) => {
-    // Check if tab already exists
-    const existingTab = tableTabs.find(tab => tab.tableName === tableName && tab.type === 'table');
-    if (existingTab) {
-      setActiveTableTabId(existingTab.id);
-      return;
-    }
-
+    // Always create a new tab, even if the table is already open
     const newTab: TableTab = {
       id: `${activeTab?.id}-${tableName}-${Date.now()}`,
       tableName,
@@ -376,6 +370,7 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
             <DataViewer
               activeTab={activeTab}
               tableName={activeTableTab.tableName!}
+              tabId={activeTableTab.id}
               onBack={() => closeTableTab(activeTableTab.id)}
               sqlFilter={activeTableTab.sqlFilter}
               onForeignKeyClick={(targetTable, targetColumn, value) => {

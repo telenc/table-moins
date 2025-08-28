@@ -13,6 +13,8 @@ import {
 import { TabConnection } from '../../../database/connection-service';
 import { ResizableTable } from '../ui/ResizableTable';
 import { FilterPanel, FilterCondition, FilterMode } from '../ui/FilterPanel';
+import { Button } from '../ui/button';
+import { Tooltip } from '../ui/Tooltip';
 import JsonView from '@uiw/react-json-view';
 import { Search, Copy, Check, X as XIcon } from 'lucide-react';
 import { useMemo } from 'react';
@@ -20,6 +22,7 @@ import { useMemo } from 'react';
 interface DataViewerProps {
   activeTab: TabConnection | null;
   tableName?: string;
+  tabId?: string;
   onBack?: () => void;
   sqlFilter?: string;
   onForeignKeyClick?: (targetTable: string, targetColumn: string, value: any) => void;
@@ -43,6 +46,11 @@ interface ColumnStructure {
   comment: string;
   foreignKeyTable?: string;
   foreignKeyColumn?: string;
+  isReferencedByOtherTables?: boolean;
+  referencedByTables?: Array<{
+    table: string;
+    column: string;
+  }>;
 }
 
 interface IndexInfo {
@@ -72,6 +80,7 @@ interface EditingDataCell {
 export const DataViewer: React.FC<DataViewerProps> = ({
   activeTab,
   tableName,
+  tabId,
   onBack,
   sqlFilter,
   onForeignKeyClick,
@@ -97,6 +106,24 @@ export const DataViewer: React.FC<DataViewerProps> = ({
   const [whereClause, setWhereClause] = useState<string>('');
   const [filterMode, setFilterMode] = useState<FilterMode>('builder');
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
+
+  // State pour gérer les modifications des cellules
+  const [modifiedCells, setModifiedCells] = useState<
+    Map<
+      string,
+      {
+        rowIndex: number;
+        columnKey: string;
+        originalValue: any;
+        newValue: any;
+        rowPrimaryKey: { [columnName: string]: any };
+      }
+    >
+  >(new Map());
+  const [originalData, setOriginalData] = useState<TableData | null>(null);
+  const [savingChanges, setSavingChanges] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Per-table filter storage
   const [tableFilters, setTableFilters] = useState<
@@ -134,26 +161,19 @@ export const DataViewer: React.FC<DataViewerProps> = ({
   // Track previous table name to detect real table changes
   const previousTableName = useRef<string | undefined>(undefined);
 
-  // Save and restore filters per table
+  // Save and restore filters per tab (not per table)
   useEffect(() => {
-    if (!tableName) return;
+    if (!tableName || !tabId) return;
 
-    // Check if the table actually changed
-    const hasTableChanged = previousTableName.current !== tableName;
-    previousTableName.current = tableName;
+    // Use tabId for unique filter storage
+    const filterKey = tabId || tableName;
 
-    if (!hasTableChanged) {
-      // Same table, don't reset anything
-      console.log('🔍 DEBUG - Same table, no filter restoration needed:', tableName);
-      return;
-    }
+    console.log('🔍 DEBUG - Managing filters for tab:', filterKey, 'table:', tableName);
 
-    console.log('🔍 DEBUG - Table changed, managing filters for:', tableName);
-
-    // Restore filters for this table if they exist
-    const savedFilters = tableFilters[tableName];
+    // Restore filters for this tab if they exist
+    const savedFilters = tableFilters[filterKey];
     if (savedFilters) {
-      console.log('🔍 DEBUG - Restoring saved filters for table:', tableName, savedFilters);
+      console.log('🔍 DEBUG - Restoring saved filters for tab:', filterKey, savedFilters);
       setWhereClause(savedFilters.whereClause);
       setFilterMode(savedFilters.filterMode);
       setFilterConditions(savedFilters.filterConditions);
@@ -163,7 +183,7 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       setJsonViewerData(savedFilters.jsonViewerData || null);
       setJsonSearchTerm(savedFilters.jsonSearchTerm || '');
     } else {
-      console.log('🔍 DEBUG - No saved filters, using defaults for table:', tableName);
+      console.log('🔍 DEBUG - No saved filters, using defaults for tab:', filterKey);
       // Don't reset whereClause if we have an sqlFilter from foreign key navigation
       if (!sqlFilter) {
         setWhereClause('');
@@ -177,7 +197,7 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       setJsonViewerData(null);
       setJsonSearchTerm('');
     }
-  }, [tableName, tableFilters, sqlFilter]); // Include sqlFilter to prevent overriding it
+  }, [tableName, tabId, tableFilters, sqlFilter]); // Include tabId and sqlFilter
 
   // Charger les données quand la table change
   useEffect(() => {
@@ -253,11 +273,19 @@ export const DataViewer: React.FC<DataViewerProps> = ({
         tableData.columns ||
         (tableData.fields ? tableData.fields.map((field: any) => field.name) : []);
 
-      setData({
+      const newData = {
         columns: columns,
         rows: tableData.rows || [],
         total: tableData.total || tableData.rowCount,
-      });
+      };
+
+      setData(newData);
+      // Sauvegarder les données originales pour le tracking des modifications
+      setOriginalData(JSON.parse(JSON.stringify(newData))); // Deep copy
+      // Reset modifications when new data is loaded
+      setModifiedCells(new Map());
+      setSaveError(null);
+      setSaveSuccess(false);
 
       console.log('🔍 DEBUG loadTableData - Final data structure:', {
         columnsCount: columns.length,
@@ -360,8 +388,16 @@ export const DataViewer: React.FC<DataViewerProps> = ({
 
   const handleSort = (columnKey: string, direction: 'asc' | 'desc') => {
     console.log('🔍 DEBUG DataViewer handleSort:', columnKey, direction);
-    setSortColumn(columnKey);
-    setSortDirection(direction);
+    
+    // Handle unsorted state (empty string means no sort)
+    if (columnKey === '') {
+      setSortColumn('');
+      setSortDirection('asc');
+    } else {
+      setSortColumn(columnKey);
+      setSortDirection(direction);
+    }
+    
     setPage(1); // Reset to first page when sorting
   };
 
@@ -378,10 +414,11 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       jsonSearchTerm: string;
     }> = {}
   ) => {
-    if (tableName) {
+    const filterKey = tabId || tableName;
+    if (filterKey) {
       setTableFilters(prev => ({
         ...prev,
-        [tableName]: {
+        [filterKey]: {
           whereClause: overrides.whereClause ?? whereClause,
           filterMode: overrides.filterMode ?? filterMode,
           filterConditions: overrides.filterConditions ?? filterConditions,
@@ -419,6 +456,15 @@ export const DataViewer: React.FC<DataViewerProps> = ({
   const handleOpenFilter = () => {
     setFilterPanelOpen(true);
     saveTableState({ filterPanelOpen: true });
+  };
+
+  const handleReload = () => {
+    if (viewMode === 'data') {
+      loadTableData();
+    } else {
+      loadTableStructure();
+      loadTableIndexes();
+    }
   };
 
   const handleCloseFilter = () => {
@@ -475,6 +521,15 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       return 'NULL';
     }
 
+    // Format dates (both Date objects and date strings)
+    if (value instanceof Date) {
+      return formatDateObject(value);
+    }
+
+    if (typeof value === 'string' && isDateString(value)) {
+      return formatDateString(value);
+    }
+
     if (typeof value === 'object') {
       return JSON.stringify(value);
     }
@@ -484,6 +539,62 @@ export const DataViewer: React.FC<DataViewerProps> = ({
     }
 
     return String(value);
+  };
+
+  // Helper function to format Date objects
+  const formatDateObject = (date: Date): string => {
+    try {
+      // Check if time is midnight (likely date-only)
+      if (date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0) {
+        return date.toLocaleDateString();
+      }
+      
+      // Format with date and time
+      return date.toLocaleString();
+    } catch (e) {
+      return String(date); // Fallback to string conversion if formatting fails
+    }
+  };
+
+  // Helper function to detect if a string is a date
+  const isDateString = (value: string): boolean => {
+    if (!value || typeof value !== 'string') return false;
+    
+    // Common date formats: ISO strings, PostgreSQL timestamps
+    const datePatterns = [
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/,        // ISO format like 2025-08-18T00:00:00.000Z
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?$/,        // PostgreSQL timestamp: 2025-08-18 14:30:15.123456
+      /^\d{4}-\d{2}-\d{2}$/,                                       // Date only: 2025-08-18
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}:\d{2}$/, // With timezone
+    ];
+    
+    const isMatch = datePatterns.some(pattern => pattern.test(value));
+    const isValidDate = !isNaN(Date.parse(value));
+    
+    
+    return isMatch && isValidDate;
+  };
+
+  // Helper function to format date strings nicely
+  const formatDateString = (value: string): string => {
+    try {
+      const date = new Date(value);
+      
+      // Check if it's just a date (no time part)
+      if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return date.toLocaleDateString();
+      }
+      
+      // Check if time is midnight (likely date-only)
+      if (date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0) {
+        return date.toLocaleDateString();
+      }
+      
+      // Format with date and time
+      return date.toLocaleString();
+    } catch (e) {
+      return value; // Fallback to original value if formatting fails
+    }
   };
 
   // Check if a value is JSON/JSONB
@@ -725,7 +836,7 @@ export const DataViewer: React.FC<DataViewerProps> = ({
 
   // Handle data cell edit
   const handleDataCellEdit = async (rowIndex: number, columnKey: string, value: string) => {
-    if (!data || !activeTab || !tableName) return;
+    if (!data || !activeTab || !tableName || !structure || !originalData) return;
 
     try {
       // Convert the value to appropriate type
@@ -739,31 +850,138 @@ export const DataViewer: React.FC<DataViewerProps> = ({
         convertedValue = Number(value);
       }
 
+      // Get original value for comparison
+      const originalValue = originalData.rows[rowIndex][columnKey];
+
       // Update local data immediately for responsive UI
       const newData = { ...data };
       newData.rows[rowIndex][columnKey] = convertedValue;
       setData(newData);
 
-      // TODO: Send update to backend to modify actual table data
-      console.log('Data cell updated:', {
+      // Get primary key values for this row to identify it in UPDATE query
+      const primaryKeyColumns = structure.filter(col => col.isPrimaryKey);
+      const rowPrimaryKey: { [columnName: string]: any } = {};
+
+      primaryKeyColumns.forEach(pkCol => {
+        rowPrimaryKey[pkCol.name] = originalData.rows[rowIndex][pkCol.name];
+      });
+
+      // Create unique key for tracking this modification
+      const modificationKey = `${rowIndex}_${columnKey}`;
+
+      // Check if the value has actually changed from original
+      if (convertedValue === originalValue) {
+        // Value reverted to original - remove from modifications
+        setModifiedCells(prev => {
+          const newModifications = new Map(prev);
+          newModifications.delete(modificationKey);
+          return newModifications;
+        });
+      } else {
+        // Value changed - add/update modification
+        setModifiedCells(prev => {
+          const newModifications = new Map(prev);
+          newModifications.set(modificationKey, {
+            rowIndex,
+            columnKey,
+            originalValue,
+            newValue: convertedValue,
+            rowPrimaryKey,
+          });
+          return newModifications;
+        });
+      }
+
+      console.log('Cell modification tracked:', {
         tableName,
         rowIndex,
         columnKey,
-        oldValue: data.rows[rowIndex][columnKey],
+        originalValue,
         newValue: convertedValue,
+        rowPrimaryKey,
       });
-
-      // Here we would need to implement UPDATE SQL query
-      // For now, just log the update
     } catch (err) {
-      console.error('Error updating data cell:', err);
-      setError('Failed to update cell value');
+      console.error('Error tracking cell modification:', err);
+      setError('Failed to track cell modification');
     }
   };
 
   // Cancel data cell edit
   const cancelDataCellEdit = () => {
     setEditingDataCell(null);
+  };
+
+  // Save all modifications to database
+  const saveChanges = async () => {
+    if (!activeTab || !tableName || modifiedCells.size === 0) return;
+
+    setSavingChanges(true);
+    setSaveError(null);
+
+    try {
+      // Build updates array for the IPC call
+      const updates = Array.from(modifiedCells.values()).map(modification => ({
+        whereClause: modification.rowPrimaryKey,
+        setClause: {
+          [modification.columnKey]: modification.newValue,
+        },
+      }));
+
+      console.log('Saving changes:', {
+        tableName,
+        modifications: updates.length,
+        updates,
+      });
+
+      // Call the IPC method to update database
+      const result = await window.electron.invoke(
+        'database:update-table-data',
+        activeTab.id,
+        tableName,
+        updates
+      );
+
+      if (result.success) {
+        console.log(`Successfully updated ${result.updatedRows} rows`);
+
+        // Update original data to match current data (modifications are now saved)
+        setOriginalData(JSON.parse(JSON.stringify(data)));
+        // Clear modifications
+        setModifiedCells(new Map());
+        // Show success feedback
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        console.error('Save failed:', result.error);
+        setSaveError(result.error || 'Failed to save changes');
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save changes');
+    } finally {
+      setSavingChanges(false);
+    }
+  };
+
+  // Cancel all modifications
+  const cancelChanges = () => {
+    if (!originalData) return;
+
+    // Revert data to original state
+    setData(JSON.parse(JSON.stringify(originalData)));
+    // Clear all modifications
+    setModifiedCells(new Map());
+    // Clear editing state
+    setEditingDataCell(null);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    console.log('All modifications cancelled');
+  };
+
+  // Check if a cell is modified
+  const isCellModified = (rowIndex: number, columnKey: string): boolean => {
+    return modifiedCells.has(`${rowIndex}_${columnKey}`);
   };
 
   if (!activeTab) {
@@ -799,6 +1017,51 @@ export const DataViewer: React.FC<DataViewerProps> = ({
 
   return (
     <div className="h-full flex flex-col">
+      {/* Save/Cancel buttons - Only visible when there are modifications */}
+      {modifiedCells.size > 0 && (
+        <div className="fixed bottom-28 right-4" style={{ zIndex: 10000 }}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {modifiedCells.size} change{modifiedCells.size > 1 ? 's' : ''}
+            </span>
+            <Button onClick={saveChanges} disabled={savingChanges} size="sm">
+              {savingChanges ? 'Saving...' : 'Save'}
+            </Button>
+            <Button onClick={cancelChanges} disabled={savingChanges} variant="outline" size="sm">
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Success/Error notifications */}
+      {saveSuccess && (
+        <div
+          className="fixed bottom-40 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg shadow-lg"
+          style={{ zIndex: 10000 }}
+        >
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4" />
+            Changes saved successfully!
+          </div>
+        </div>
+      )}
+
+      {saveError && (
+        <div
+          className="fixed bottom-40 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg max-w-sm"
+          style={{ zIndex: 10000 }}
+        >
+          <div className="flex items-center gap-2">
+            <XIcon className="h-4 w-4" />
+            <div>
+              <div className="font-medium">Save failed</div>
+              <div className="text-sm">{saveError}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Switch Data/Structure - Always visible when table is selected */}
       <div className="fixed bottom-16 right-4 flex items-center gap-2" style={{ zIndex: 9999 }}>
         {/* Filter button - Only in data view */}
@@ -813,6 +1076,15 @@ export const DataViewer: React.FC<DataViewerProps> = ({
             <Filter className="h-4 w-4" />
           </button>
         )}
+
+        {/* Reload button */}
+        <button
+          className="p-2 bg-white border border-gray-200 rounded-lg shadow-lg hover:bg-gray-50 transition-colors text-gray-600 hover:text-blue-600"
+          onClick={handleReload}
+          title={`Reload ${viewMode === 'data' ? 'data' : 'structure'}`}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
 
         {/* Data/Structure Switch */}
         <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-lg">
@@ -858,409 +1130,289 @@ export const DataViewer: React.FC<DataViewerProps> = ({
             </div>
           )}
 
-      {/* Data Table */}
-      {viewMode === 'data' && data && !loading && (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Filter Panel */}
-          {data && (
-            <FilterPanel
-              columns={data.columns}
-              isOpen={filterPanelOpen}
-              onClose={handleCloseFilter}
-              onApplyFilter={handleApplyFilter}
-              initialWhere={whereClause}
-              initialMode={filterMode}
-              initialConditions={filterConditions}
-            />
-          )}
+          {/* Data Table */}
+          {viewMode === 'data' && data && !loading && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Filter Panel */}
+              {data && (
+                <FilterPanel
+                  columns={data.columns}
+                  isOpen={filterPanelOpen}
+                  onClose={handleCloseFilter}
+                  onApplyFilter={handleApplyFilter}
+                  initialWhere={whereClause}
+                  initialMode={filterMode}
+                  initialConditions={filterConditions}
+                />
+              )}
 
-          <ResizableTable
-            columns={data.columns.map(column => ({
-              key: column,
-              title: column,
-              render: (value: any, row: any, rowIndex: number) => {
-                const isJson = isJsonValue(value);
+              <ResizableTable
+                columns={data.columns.map(column => {
+                  const columnDef = {
+                    key: column,
+                    title: column,
+                    render: (value: any, row: any, rowIndex: number) => {
+                    
+                    const isJson = isJsonValue(value);
 
-                // Check if this column has foreign key relations
-                const columnInfo = structure?.find(col => col.name === column);
-                const hasForeignKey = columnInfo?.isForeignKey && onForeignKeyClick && value;
-                const hasReverseForeignKey =
-                  columnInfo?.isReferencedByOtherTables && onForeignKeyClick && value;
+                    // Check if this column has foreign key relations
+                    const columnInfo = structure?.find(col => col.name === column);
+                    const hasForeignKey = columnInfo?.isForeignKey && onForeignKeyClick && value;
+                    const hasReverseForeignKey =
+                      columnInfo?.isReferencedByOtherTables && onForeignKeyClick && value;
 
-                return (
-                  <div className="flex items-center gap-1">
-                    <div className="truncate flex-1" title={formatCellValue(value)}>
-                      {value === null || value === undefined ? (
-                        <span className="text-gray-400 italic">NULL</span>
-                      ) : (
-                        <span className="text-gray-900">{formatCellValue(value)}</span>
-                      )}
+                    const isModified = isCellModified(rowIndex, column);
+
+                    return (
+                      <div
+                        className={`flex items-center gap-1 ${isModified ? 'bg-yellow-100 border-l-2 border-l-orange-400' : ''}`}
+                      >
+                        <div className="truncate flex-1" title={formatCellValue(value)}>
+                          {value === null || value === undefined ? (
+                            <span className="text-gray-400 italic">NULL</span>
+                          ) : (
+                            <span
+                              className={`${isModified ? 'text-orange-800 font-medium' : 'text-gray-900'}`}
+                            >
+                              {formatCellValue(value)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Foreign Key Navigation Button */}
+                        {hasForeignKey && columnInfo && (
+                          <Tooltip
+                            content={`${columnInfo.foreignKeyTable} where ${columnInfo.foreignKeyColumn} = ${value}`}
+                            delay={200}
+                          >
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                onForeignKeyClick!(
+                                  columnInfo.foreignKeyTable!,
+                                  columnInfo.foreignKeyColumn!,
+                                  value
+                                );
+                              }}
+                              className="ml-1 text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0"
+                            >
+                              <svg
+                                className="h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={1.5}
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                                />
+                              </svg>
+                            </button>
+                          </Tooltip>
+                        )}
+
+                        {/* Reverse Foreign Key Navigation Buttons */}
+                        {hasReverseForeignKey &&
+                          columnInfo?.referencedByTables?.map((refTable, index) => (
+                            <Tooltip
+                              key={`${refTable.table}-${refTable.column}-${index}`}
+                              content={`${refTable.table} where ${refTable.column} = ${value}`}
+                              delay={200}
+                            >
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  onForeignKeyClick!(refTable.table, refTable.column, value);
+                                }}
+                                className="ml-1 text-green-600 hover:text-green-800 transition-colors flex-shrink-0"
+                              >
+                                <svg
+                                  className="h-3 w-3 transform rotate-180"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth={1.5}
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                                  />
+                                </svg>
+                              </button>
+                            </Tooltip>
+                          ))}
+
+                        {/* JSON View Button */}
+                        {isJson && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleJsonView(value);
+                            }}
+                            className="p-1 hover:bg-blue-100 rounded transition-colors flex-shrink-0"
+                            title="View JSON"
+                          >
+                            <Eye className="h-3 w-3 text-blue-600" />
+                          </button>
+                        )}
+                      </div>
+                      );
+                    },
+                  };
+                  
+                  return columnDef;
+                })}
+                data={data.rows}
+                onCellEdit={handleDataCellEdit}
+                onCellDoubleClick={handleDataCellDoubleClick}
+                editingCell={editingDataCell}
+                onEditingChange={setEditingDataCell}
+                onSort={handleSort}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                maxHeight="calc(100vh - 180px)"
+                foreignKeys={
+                  structure
+                    ?.filter(col => col.isForeignKey)
+                    .map(col => ({
+                      columnName: col.name,
+                      targetTable: col.foreignKeyTable || '',
+                      targetColumn: col.foreignKeyColumn || '',
+                    })) || []
+                }
+                onForeignKeyClick={onForeignKeyClick}
+              />
+
+              {/* TablePlus-style Pagination Controls - Always visible at bottom */}
+              {data.total !== undefined && (
+                <div className="flex-shrink-0 border-t p-3 flex items-center justify-between bg-gray-50 text-xs">
+                  {/* Left side - Row info and limit selector */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-gray-600">
+                      Showing {Math.min((page - 1) * limit + 1, data.total)} to{' '}
+                      {Math.min(page * limit, data.total)} of {data.total} rows
                     </div>
 
-                    {/* Foreign Key Navigation Button */}
-                    {hasForeignKey && columnInfo && (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          onForeignKeyClick!(
-                            columnInfo.foreignKeyTable!,
-                            columnInfo.foreignKeyColumn!,
-                            value
-                          );
-                        }}
-                        className="ml-1 text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0"
-                        title={`Open ${columnInfo.foreignKeyTable} where ${columnInfo.foreignKeyColumn} = ${value}`}
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Limit:</span>
+                      <select
+                        value={limit}
+                        onChange={e => handleLimitChange(Number(e.target.value))}
+                        className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:border-blue-500"
                       >
-                        <svg
-                          className="h-3 w-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                          />
-                        </svg>
-                      </button>
-                    )}
-
-                    {/* Reverse Foreign Key Navigation Buttons */}
-                    {hasReverseForeignKey &&
-                      columnInfo?.referencedByTables?.map((refTable, index) => (
-                        <button
-                          key={`${refTable.table}-${refTable.column}-${index}`}
-                          onClick={e => {
-                            e.stopPropagation();
-                            onForeignKeyClick!(refTable.table, refTable.column, value);
-                          }}
-                          className="ml-1 text-green-600 hover:text-green-800 transition-colors flex-shrink-0"
-                          title={`Open ${refTable.table} where ${refTable.column} = ${value}`}
-                        >
-                          <svg
-                            className="h-3 w-3 transform rotate-180"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                            />
-                          </svg>
-                        </button>
-                      ))}
-
-                    {/* JSON View Button */}
-                    {isJson && (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleJsonView(value);
-                        }}
-                        className="p-1 hover:bg-blue-100 rounded transition-colors flex-shrink-0"
-                        title="View JSON"
-                      >
-                        <Eye className="h-3 w-3 text-blue-600" />
-                      </button>
-                    )}
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={200}>200</option>
+                        <option value={500}>500</option>
+                        <option value={1000}>1000</option>
+                      </select>
+                    </div>
                   </div>
-                );
-              },
-            }))}
-            data={data.rows}
-            onCellEdit={handleDataCellEdit}
-            onCellDoubleClick={handleDataCellDoubleClick}
-            editingCell={editingDataCell}
-            onEditingChange={setEditingDataCell}
-            onSort={handleSort}
-            maxHeight="calc(100vh - 180px)"
-            foreignKeys={
-              structure
-                ?.filter(col => col.isForeignKey)
-                .map(col => ({
-                  columnName: col.name,
-                  targetTable: col.foreignKeyTable || '',
-                  targetColumn: col.foreignKeyColumn || '',
-                })) || []
-            }
-            onForeignKeyClick={onForeignKeyClick}
-          />
 
-          {/* TablePlus-style Pagination Controls - Always visible at bottom */}
-          {data.total !== undefined && (
-            <div className="flex-shrink-0 border-t p-3 flex items-center justify-between bg-gray-50 text-xs">
-              {/* Left side - Row info and limit selector */}
-              <div className="flex items-center gap-4">
-                <div className="text-gray-600">
-                  Showing {Math.min((page - 1) * limit + 1, data.total)} to{' '}
-                  {Math.min(page * limit, data.total)} of {data.total} rows
+                  {/* Right side - Navigation controls */}
+                  <div className="flex items-center gap-1">
+                    {/* First page */}
+                    <button
+                      onClick={handleFirstPage}
+                      disabled={page <= 1}
+                      className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="First page"
+                    >
+                      <ChevronsLeft className="h-3 w-3" />
+                    </button>
+
+                    {/* Previous page */}
+                    <button
+                      onClick={handlePreviousPage}
+                      disabled={page <= 1}
+                      className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Previous page"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                    </button>
+
+                    {/* Page input */}
+                    <div className="flex items-center gap-1 mx-2">
+                      <span className="text-gray-600">Page</span>
+                      <input
+                        type="number"
+                        value={page}
+                        onChange={e => {
+                          const newPage = parseInt(e.target.value);
+                          if (!isNaN(newPage)) {
+                            handleGoToPage(newPage);
+                          }
+                        }}
+                        className="w-12 border border-gray-300 rounded px-1 py-1 text-xs text-center bg-white focus:outline-none focus:border-blue-500"
+                        min="1"
+                        max={data.total ? Math.ceil(data.total / limit) : 1}
+                      />
+                      <span className="text-gray-600">
+                        of {data.total ? Math.ceil(data.total / limit) : 1}
+                      </span>
+                    </div>
+
+                    {/* Next page */}
+                    <button
+                      onClick={handleNextPage}
+                      disabled={!data.total || page * limit >= data.total}
+                      className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Next page"
+                    >
+                      <ChevronRight className="h-3 w-3" />
+                    </button>
+
+                    {/* Last page */}
+                    <button
+                      onClick={handleLastPage}
+                      disabled={!data.total || page * limit >= data.total}
+                      className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Last page"
+                    >
+                      <ChevronsRight className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">Limit:</span>
-                  <select
-                    value={limit}
-                    onChange={e => handleLimitChange(Number(e.target.value))}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value={200}>200</option>
-                    <option value={500}>500</option>
-                    <option value={1000}>1000</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Right side - Navigation controls */}
-              <div className="flex items-center gap-1">
-                {/* First page */}
-                <button
-                  onClick={handleFirstPage}
-                  disabled={page <= 1}
-                  className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="First page"
-                >
-                  <ChevronsLeft className="h-3 w-3" />
-                </button>
-
-                {/* Previous page */}
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={page <= 1}
-                  className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Previous page"
-                >
-                  <ChevronLeft className="h-3 w-3" />
-                </button>
-
-                {/* Page input */}
-                <div className="flex items-center gap-1 mx-2">
-                  <span className="text-gray-600">Page</span>
-                  <input
-                    type="number"
-                    value={page}
-                    onChange={e => {
-                      const newPage = parseInt(e.target.value);
-                      if (!isNaN(newPage)) {
-                        handleGoToPage(newPage);
-                      }
-                    }}
-                    className="w-12 border border-gray-300 rounded px-1 py-1 text-xs text-center bg-white focus:outline-none focus:border-blue-500"
-                    min="1"
-                    max={data.total ? Math.ceil(data.total / limit) : 1}
-                  />
-                  <span className="text-gray-600">
-                    of {data.total ? Math.ceil(data.total / limit) : 1}
-                  </span>
-                </div>
-
-                {/* Next page */}
-                <button
-                  onClick={handleNextPage}
-                  disabled={!data.total || page * limit >= data.total}
-                  className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Next page"
-                >
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-
-                {/* Last page */}
-                <button
-                  onClick={handleLastPage}
-                  disabled={!data.total || page * limit >= data.total}
-                  className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Last page"
-                >
-                  <ChevronsRight className="h-3 w-3" />
-                </button>
-              </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Empty State */}
-      {viewMode === 'data' && data && !loading && data.rows.length === 0 && (
-        <div className="flex items-center justify-center h-32 text-gray-500">
-          <p>No data found in {tableName}</p>
-        </div>
-      )}
+          {/* Empty State */}
+          {viewMode === 'data' && data && !loading && data.rows.length === 0 && (
+            <div className="flex items-center justify-center h-32 text-gray-500">
+              <p>No data found in {tableName}</p>
+            </div>
+          )}
 
-      {/* Structure Table - Excel/TablePlus style */}
-      {viewMode === 'structure' && structure && !loading && (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Columns Table */}
-          <ResizableTable
-            columns={[
-              {
-                key: 'name',
-                title: 'Column',
-                width: 200,
-                minWidth: 100,
-                render: (value: any, row: ColumnStructure) => (
-                  <span
-                    className={`${row.isPrimaryKey ? 'font-semibold text-blue-700' : 'text-gray-900'} truncate block`}
-                    title={value}
-                  >
-                    {value}
-                  </span>
-                ),
-              },
-              {
-                key: 'type',
-                title: 'Type',
-                width: 150,
-                minWidth: 80,
-                render: (value: any) => (
-                  <span className="text-gray-700 font-mono text-xs truncate block" title={value}>
-                    {value}
-                  </span>
-                ),
-              },
-              {
-                key: 'nullable',
-                title: 'Null',
-                width: 80,
-                minWidth: 60,
-                render: (value: any) => (
-                  <div className="text-center">
-                    <span className={`text-xs ${value ? 'text-green-600' : 'text-red-600'}`}>
-                      {value ? 'YES' : 'NO'}
-                    </span>
-                  </div>
-                ),
-              },
-              {
-                key: 'defaultValue',
-                title: 'Default',
-                width: 150,
-                minWidth: 80,
-                render: (value: any) => (
-                  <span
-                    className="text-gray-700 font-mono text-xs truncate block"
-                    title={value || 'NULL'}
-                  >
-                    {value ? value : <span className="text-gray-400 italic">NULL</span>}
-                  </span>
-                ),
-              },
-              {
-                key: 'keys',
-                title: 'Key',
-                width: 80,
-                minWidth: 60,
-                render: (_value: any, row: ColumnStructure) => (
-                  <div className="flex justify-center gap-0.5">
-                    {row.isPrimaryKey && <span className="text-blue-600 font-semibold">PK</span>}
-                    {row.isForeignKey && <span className="text-purple-600">FK</span>}
-                    {row.isUnique && !row.isPrimaryKey && (
-                      <span className="text-orange-600">UQ</span>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'extra',
-                title: 'Extra',
-                width: 120,
-                minWidth: 80,
-                render: (_value: any, row: ColumnStructure) => (
-                  <span className="text-gray-700 truncate block">
-                    {row.isAutoIncrement ? (
-                      <span className="text-xs">auto_increment</span>
-                    ) : (
-                      <span className="text-gray-400 italic">NULL</span>
-                    )}
-                  </span>
-                ),
-              },
-            ]}
-            data={structure.map(col => ({
-              ...col,
-              keys: '', // Placeholder for key column
-              extra: '', // Placeholder for extra column
-            }))}
-            onCellEdit={(rowIndex, columnKey, value) => {
-              // Handle structure cell edit
-              if (!structure) return;
-              const updatedStructure = [...structure];
-              const column = updatedStructure[rowIndex];
-
-              switch (columnKey) {
-                case 'name':
-                  column.name = value;
-                  break;
-                case 'type':
-                  column.type = value;
-                  break;
-                case 'nullable':
-                  column.nullable = value.toUpperCase() === 'YES';
-                  break;
-                case 'defaultValue':
-                  column.defaultValue = value || null;
-                  break;
-              }
-
-              setStructure(updatedStructure);
-              console.log('Structure updated:', column);
-            }}
-            onCellDoubleClick={(rowIndex, columnKey) => {
-              // Only allow editing certain columns
-              if (['name', 'type', 'nullable', 'defaultValue'].includes(columnKey)) {
-                handleCellDoubleClick(rowIndex, columnKey as keyof ColumnStructure);
-              }
-            }}
-            editingCell={
-              editingCell
-                ? {
-                    rowIndex: editingCell.rowIndex,
-                    columnKey: editingCell.field,
-                    value: editingCell.value,
-                  }
-                : null
-            }
-            onEditingChange={editing => {
-              if (editing) {
-                setEditingCell({
-                  rowIndex: editing.rowIndex,
-                  field: editing.columnKey as keyof ColumnStructure,
-                  value: editing.value,
-                });
-              } else {
-                setEditingCell(null);
-              }
-            }}
-            maxHeight="calc(50vh - 90px)"
-          />
-
-          {/* Index Table - Section séparée */}
-          {indexes && indexes.length > 0 && (
-            <div className="mt-6 flex-1">
+          {/* Structure Table - Excel/TablePlus style */}
+          {viewMode === 'structure' && structure && !loading && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Columns Table */}
               <ResizableTable
                 columns={[
                   {
                     key: 'name',
-                    title: 'index_name',
-                    width: 160,
+                    title: 'Column',
+                    width: 200,
                     minWidth: 100,
-                    render: (value: any) => (
-                      <span className="truncate block" title={value}>
+                    render: (value: any, row: ColumnStructure) => (
+                      <span
+                        className={`${row.isPrimaryKey ? 'font-semibold text-blue-700' : 'text-gray-900'} truncate block`}
+                        title={value}
+                      >
                         {value}
                       </span>
                     ),
                   },
                   {
-                    key: 'algorithm',
-                    title: 'index_algorithm',
-                    width: 120,
+                    key: 'type',
+                    title: 'Type',
+                    width: 150,
                     minWidth: 80,
                     render: (value: any) => (
                       <span
@@ -1272,70 +1424,58 @@ export const DataViewer: React.FC<DataViewerProps> = ({
                     ),
                   },
                   {
-                    key: 'isUnique',
-                    title: 'is_unique',
+                    key: 'nullable',
+                    title: 'Null',
                     width: 80,
                     minWidth: 60,
                     render: (value: any) => (
                       <div className="text-center">
-                        <span
-                          className={`text-xs ${value ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
-                        >
-                          {value ? 'TRUE' : 'FALSE'}
+                        <span className={`text-xs ${value ? 'text-green-600' : 'text-red-600'}`}>
+                          {value ? 'YES' : 'NO'}
                         </span>
                       </div>
                     ),
                   },
                   {
-                    key: 'columnName',
-                    title: 'column_name',
+                    key: 'defaultValue',
+                    title: 'Default',
                     width: 150,
-                    minWidth: 100,
+                    minWidth: 80,
                     render: (value: any) => (
-                      <span className="text-gray-700 truncate block" title={value}>
-                        {value}
+                      <span
+                        className="text-gray-700 font-mono text-xs truncate block"
+                        title={value || 'NULL'}
+                      >
+                        {value ? value : <span className="text-gray-400 italic">NULL</span>}
                       </span>
                     ),
                   },
                   {
-                    key: 'condition',
-                    title: 'condition',
-                    width: 150,
-                    minWidth: 100,
-                    render: (value: any) => (
-                      <span className="text-gray-700 truncate block" title={value || 'NULL'}>
-                        {value && value !== 'EMPTY' ? (
-                          value
-                        ) : (
-                          <span className="text-gray-400 italic">NULL</span>
+                    key: 'keys',
+                    title: 'Key',
+                    width: 80,
+                    minWidth: 60,
+                    render: (_value: any, row: ColumnStructure) => (
+                      <div className="flex justify-center gap-0.5">
+                        {row.isPrimaryKey && (
+                          <span className="text-blue-600 font-semibold">PK</span>
                         )}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: 'include',
-                    title: 'include',
-                    width: 150,
-                    minWidth: 100,
-                    render: (value: any) => (
-                      <span className="text-gray-700 truncate block" title={value || 'NULL'}>
-                        {value && value !== 'EMPTY' ? (
-                          value
-                        ) : (
-                          <span className="text-gray-400 italic">NULL</span>
+                        {row.isForeignKey && <span className="text-purple-600">FK</span>}
+                        {row.isUnique && !row.isPrimaryKey && (
+                          <span className="text-orange-600">UQ</span>
                         )}
-                      </span>
+                      </div>
                     ),
                   },
                   {
-                    key: 'comment',
-                    title: 'comment',
-                    width: 150,
-                    minWidth: 100,
-                    render: (value: any) => (
-                      <span className="text-gray-700 truncate block" title={value || 'NULL'}>
-                        {value && value !== 'NULL' ? (
-                          value
+                    key: 'extra',
+                    title: 'Extra',
+                    width: 120,
+                    minWidth: 80,
+                    render: (_value: any, row: ColumnStructure) => (
+                      <span className="text-gray-700 truncate block">
+                        {row.isAutoIncrement ? (
+                          <span className="text-xs">auto_increment</span>
                         ) : (
                           <span className="text-gray-400 italic">NULL</span>
                         )}
@@ -1343,13 +1483,173 @@ export const DataViewer: React.FC<DataViewerProps> = ({
                     ),
                   },
                 ]}
-                data={indexes}
-                maxHeight="calc(40vh - 90px)"
+                data={structure.map(col => ({
+                  ...col,
+                  keys: '', // Placeholder for key column
+                  extra: '', // Placeholder for extra column
+                }))}
+                onCellEdit={(rowIndex, columnKey, value) => {
+                  // Handle structure cell edit
+                  if (!structure) return;
+                  const updatedStructure = [...structure];
+                  const column = updatedStructure[rowIndex];
+
+                  switch (columnKey) {
+                    case 'name':
+                      column.name = value;
+                      break;
+                    case 'type':
+                      column.type = value;
+                      break;
+                    case 'nullable':
+                      column.nullable = value.toUpperCase() === 'YES';
+                      break;
+                    case 'defaultValue':
+                      column.defaultValue = value || null;
+                      break;
+                  }
+
+                  setStructure(updatedStructure);
+                  console.log('Structure updated:', column);
+                }}
+                onCellDoubleClick={(rowIndex, columnKey) => {
+                  // Only allow editing certain columns
+                  if (['name', 'type', 'nullable', 'defaultValue'].includes(columnKey)) {
+                    handleCellDoubleClick(rowIndex, columnKey as keyof ColumnStructure);
+                  }
+                }}
+                editingCell={
+                  editingCell
+                    ? {
+                        rowIndex: editingCell.rowIndex,
+                        columnKey: editingCell.field,
+                        value: editingCell.value,
+                      }
+                    : null
+                }
+                onEditingChange={editing => {
+                  if (editing) {
+                    setEditingCell({
+                      rowIndex: editing.rowIndex,
+                      field: editing.columnKey as keyof ColumnStructure,
+                      value: editing.value,
+                    });
+                  } else {
+                    setEditingCell(null);
+                  }
+                }}
+                maxHeight="calc(50vh - 90px)"
               />
+
+              {/* Index Table - Section séparée */}
+              {indexes && indexes.length > 0 && (
+                <div className="mt-6 flex-1">
+                  <ResizableTable
+                    columns={[
+                      {
+                        key: 'name',
+                        title: 'index_name',
+                        width: 160,
+                        minWidth: 100,
+                        render: (value: any) => (
+                          <span className="truncate block" title={value}>
+                            {value}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'algorithm',
+                        title: 'index_algorithm',
+                        width: 120,
+                        minWidth: 80,
+                        render: (value: any) => (
+                          <span
+                            className="text-gray-700 font-mono text-xs truncate block"
+                            title={value}
+                          >
+                            {value}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'isUnique',
+                        title: 'is_unique',
+                        width: 80,
+                        minWidth: 60,
+                        render: (value: any) => (
+                          <div className="text-center">
+                            <span
+                              className={`text-xs ${value ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
+                            >
+                              {value ? 'TRUE' : 'FALSE'}
+                            </span>
+                          </div>
+                        ),
+                      },
+                      {
+                        key: 'columnName',
+                        title: 'column_name',
+                        width: 150,
+                        minWidth: 100,
+                        render: (value: any) => (
+                          <span className="text-gray-700 truncate block" title={value}>
+                            {value}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'condition',
+                        title: 'condition',
+                        width: 150,
+                        minWidth: 100,
+                        render: (value: any) => (
+                          <span className="text-gray-700 truncate block" title={value || 'NULL'}>
+                            {value && value !== 'EMPTY' ? (
+                              value
+                            ) : (
+                              <span className="text-gray-400 italic">NULL</span>
+                            )}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'include',
+                        title: 'include',
+                        width: 150,
+                        minWidth: 100,
+                        render: (value: any) => (
+                          <span className="text-gray-700 truncate block" title={value || 'NULL'}>
+                            {value && value !== 'EMPTY' ? (
+                              value
+                            ) : (
+                              <span className="text-gray-400 italic">NULL</span>
+                            )}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'comment',
+                        title: 'comment',
+                        width: 150,
+                        minWidth: 100,
+                        render: (value: any) => (
+                          <span className="text-gray-700 truncate block" title={value || 'NULL'}>
+                            {value && value !== 'NULL' ? (
+                              value
+                            ) : (
+                              <span className="text-gray-400 italic">NULL</span>
+                            )}
+                          </span>
+                        ),
+                      },
+                    ]}
+                    data={indexes}
+                    maxHeight="calc(40vh - 90px)"
+                  />
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
           {/* Structure Empty State */}
           {viewMode === 'structure' && structure && !loading && structure.length === 0 && (
@@ -1439,7 +1739,7 @@ export const DataViewer: React.FC<DataViewerProps> = ({
                 />
               </div>
             </div>
-        </div>
+          </div>
         )}
       </div>
     </div>

@@ -27,10 +27,10 @@ interface SavedQueryInfo {
   createdAt: Date;
 }
 
-export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ 
-  activeTab, 
+export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
+  activeTab,
   onTableSelect,
-  onQuerySelect 
+  onQuerySelect,
 }) => {
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]); // Les tables (pas schémas maintenant)
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([]); // Vraies bases de données
@@ -83,7 +83,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
       loadSavedQueries();
     }
   }, [viewMode]);
-  
+
   // Auto-expand et charger les tables de la première base de données après connexion
   useEffect(() => {
     if (activeTab?.isConnected && databases.length > 0 && !databases[0].expanded) {
@@ -94,11 +94,11 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
 
   const loadAvailableDatabases = async () => {
     if (!activeTab) return;
-    
+
     try {
       const databaseList = await window.electron.invoke('database:get-databases', activeTab.id);
       setAvailableDatabases(databaseList);
-      
+
       // Sélectionner la première base par défaut ou celle de la connexion
       if (databaseList.length > 0 && !selectedDatabase) {
         const defaultDb = activeTab.connection.database || databaseList[0];
@@ -111,13 +111,13 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
 
   const loadAvailableSchemas = async () => {
     if (!activeTab) return;
-    
+
     try {
       // Pour PostgreSQL, récupérer les schémas
       if (activeTab.connection.type === 'postgresql') {
         const schemaList = await window.electron.invoke('database:get-schemas', activeTab.id);
         setAvailableSchemas(schemaList);
-        
+
         // Sélectionner le schéma 'public' par défaut
         if (schemaList.length > 0 && !selectedSchema) {
           const defaultSchema = schemaList.find((s: string) => s === 'public') || schemaList[0];
@@ -135,35 +135,43 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
 
   const loadTables = async () => {
     if (!activeTab) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       // Utiliser le schéma sélectionné pour PostgreSQL, ou la base pour les autres
-      const schemaOrDatabase = activeTab.connection.type === 'postgresql' 
-        ? selectedSchema 
-        : selectedDatabase;
-      
+      const schemaOrDatabase =
+        activeTab.connection.type === 'postgresql' ? selectedSchema : selectedDatabase;
+
       if (!schemaOrDatabase) {
         setDatabases([]);
         return;
       }
-      
-      console.log('🔍 DatabaseExplorer - Using database:', schemaOrDatabase, 'activeTab.id:', activeTab.id);
-      const tableList = await window.electron.invoke('database:get-tables', activeTab.id, schemaOrDatabase);
+
+      console.log(
+        '🔍 DatabaseExplorer - Using database:',
+        schemaOrDatabase,
+        'activeTab.id:',
+        activeTab.id
+      );
+      const tableList = await window.electron.invoke(
+        'database:get-tables',
+        activeTab.id,
+        schemaOrDatabase
+      );
       console.log('🔍 DatabaseExplorer - Tables retrieved:', tableList?.length || 0, 'tables');
-      
+
       // Créer une "base de données virtuelle" contenant toutes les tables
       const tablesInfo: DatabaseInfo = {
         name: schemaOrDatabase,
         tables: tableList.map((table: any) => ({
           name: table.name || table.tablename || table,
-          type: table.type === 'view' ? 'view' : 'table'
+          type: table.type === 'view' ? 'view' : 'table',
         })),
-        expanded: true // Toujours expanded car c'est le niveau principal maintenant
+        expanded: true, // Toujours expanded car c'est le niveau principal maintenant
       };
-      
+
       setDatabases([tablesInfo]);
     } catch (err) {
       console.error('Error loading tables:', err);
@@ -174,24 +182,26 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
   };
 
   const toggleDatabase = (dbIndex: number) => {
-    setDatabases(prev => prev.map((db, idx) => 
-      idx === dbIndex ? { ...db, expanded: !db.expanded } : db
-    ));
+    setDatabases(prev =>
+      prev.map((db, idx) => (idx === dbIndex ? { ...db, expanded: !db.expanded } : db))
+    );
   };
 
   const loadSavedQueries = async () => {
     try {
       setLoading(true);
       const result = await window.electron.invoke('sql-editor:list-auto-saved');
-      
+
       if (result.success) {
-        setSavedQueries(result.files.map((file: any) => ({
-          fileName: file.fileName,
-          filePath: file.filePath,
-          size: file.size,
-          modifiedAt: new Date(file.modifiedAt),
-          createdAt: new Date(file.createdAt)
-        })));
+        setSavedQueries(
+          result.files.map((file: any) => ({
+            fileName: file.fileName,
+            filePath: file.filePath,
+            size: file.size,
+            modifiedAt: new Date(file.modifiedAt),
+            createdAt: new Date(file.createdAt),
+          }))
+        );
       } else {
         console.error('Error loading saved queries:', result.error);
         setError('Failed to load saved queries');
@@ -206,11 +216,11 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
 
   const handleTableClick = (tableName: string, databaseName?: string) => {
     // Emit a custom event for table selection
-    const event = new CustomEvent('table-selected', { 
-      detail: { tableName, databaseName } 
+    const event = new CustomEvent('table-selected', {
+      detail: { tableName, databaseName },
     });
     window.dispatchEvent(event);
-    
+
     // Also call the callback if provided
     onTableSelect?.(tableName);
   };
@@ -226,7 +236,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
       visible: true,
       x: event.clientX,
       y: event.clientY,
-      query
+      query,
     });
   };
 
@@ -274,9 +284,9 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
   // Filtrer les tables selon le terme de recherche
   const filteredDatabases = databases.map(database => ({
     ...database,
-    tables: database.tables.filter(table => 
+    tables: database.tables.filter(table =>
       table.name.toLowerCase().includes(searchFilter.toLowerCase())
-    )
+    ),
   }));
 
   // Filtrer les requêtes sauvegardées selon le terme de recherche
@@ -300,7 +310,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
           <h3 className="font-medium text-gray-900 mb-1">Database Explorer</h3>
           <p className="text-xs text-gray-500">{activeTab.connection.name}</p>
         </div>
-        
+
         <div className="text-center text-gray-500 bg-gray-50 rounded-lg p-6">
           <Database className="h-12 w-12 mx-auto mb-3 text-gray-300" />
           <p className="text-sm font-medium mb-1">{activeTab.connection.name}</p>
@@ -308,7 +318,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
             {activeTab.connection.host}:{activeTab.connection.port}
           </p>
           <p className="text-xs text-red-500 mb-4">Not connected</p>
-          <button 
+          <button
             className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
             onClick={async () => {
               try {
@@ -329,90 +339,119 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
   return (
     <div className="h-full flex flex-col">
       <div className="mb-4 flex-shrink-0 p-4 pb-0">
-        
         {/* Sélecteur de base de données */}
         {availableDatabases.length > 1 && (
-          <div className="mt-3">
+          <div className="mt-0">
             <div className="relative border border-gray-300 rounded bg-white">
-              <span className="absolute left-2 top-1.5 text-xs text-gray-500 pointer-events-none">Database:</span>
-              <select 
+              <span className="absolute left-2 top-1.5 text-xs text-gray-500 pointer-events-none">
+                Database:
+              </span>
+              <select
                 className="w-full text-xs bg-transparent border-0 pl-18 pr-6 py-1.5 appearance-none cursor-pointer focus:outline-none"
                 value={selectedDatabase}
-              onChange={async (e) => {
-                const newDatabase = e.target.value;
-                try {
-                  setLoading(true);
-                  // Changer de base de données côté serveur
-                  await window.electron.invoke('database:change-database', activeTab.id, newDatabase);
-                  setSelectedDatabase(newDatabase);
-                  // Les schémas seront rechargés automatiquement par l'useEffect
-                } catch (error) {
-                  console.error('Error changing database:', error);
-                  setError(`Failed to change to database: ${newDatabase}`);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-            >
-              {availableDatabases.map(db => (
-                <option key={db} value={db}>{db}</option>
-              ))}
-            </select>
-            <div className="absolute right-2 top-1.5 pointer-events-none">
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+                onChange={async e => {
+                  const newDatabase = e.target.value;
+                  try {
+                    setLoading(true);
+                    // Changer de base de données côté serveur
+                    await window.electron.invoke(
+                      'database:change-database',
+                      activeTab.id,
+                      newDatabase
+                    );
+                    setSelectedDatabase(newDatabase);
+                    // Les schémas seront rechargés automatiquement par l'useEffect
+                  } catch (error) {
+                    console.error('Error changing database:', error);
+                    setError(`Failed to change to database: ${newDatabase}`);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                {availableDatabases.map(db => (
+                  <option key={db} value={db}>
+                    {db}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2 top-1.5 pointer-events-none">
+                <svg
+                  className="w-3 h-3 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </div>
             </div>
           </div>
         )}
 
         {/* Sélecteur de schéma */}
         {availableSchemas.length > 0 && activeTab?.connection.type === 'postgresql' && (
-          <div className="mt-3">
+          <div className="mt-2">
             <div className="relative border border-gray-300 rounded bg-white">
-              <span className="absolute left-2 top-1.5 text-xs text-gray-500 pointer-events-none">Schema:</span>
-              <select 
+              <span className="absolute left-2 top-1.5 text-xs text-gray-500 pointer-events-none">
+                Schema:
+              </span>
+              <select
                 className="w-full text-xs bg-transparent border-0 pl-16 pr-6 py-1.5 appearance-none cursor-pointer focus:outline-none"
                 value={selectedSchema}
-              onChange={(e) => {
-                const newSchema = e.target.value;
-                setSelectedSchema(newSchema);
-                // Les tables seront rechargées automatiquement par l'useEffect
-              }}
-            >
-              {availableSchemas.map(schema => (
-                <option key={schema} value={schema}>
-                  {schema}
-                  {schema === 'public' && ' (default)'}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-2 top-1.5 pointer-events-none">
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+                onChange={e => {
+                  const newSchema = e.target.value;
+                  setSelectedSchema(newSchema);
+                  // Les tables seront rechargées automatiquement par l'useEffect
+                }}
+              >
+                {availableSchemas.map(schema => (
+                  <option key={schema} value={schema}>
+                    {schema}
+                    {schema === 'public' && ' (default)'}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2 top-1.5 pointer-events-none">
+                <svg
+                  className="w-3 h-3 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </div>
             </div>
           </div>
         )}
 
         {/* Champ de recherche */}
-        <div className="mt-3">
+        <div className="mt-2">
           <div className="relative">
             <Search className="absolute left-2 top-1.5 h-3 w-3 text-gray-400" />
             <input
               type="text"
-              placeholder={viewMode === 'tables' ? "Filter tables..." : "Filter queries..."}
+              placeholder={viewMode === 'tables' ? 'Filter tables...' : 'Filter queries...'}
               className="w-full text-xs border border-gray-300 rounded px-2 py-1 pl-7 bg-white"
               value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
+              onChange={e => setSearchFilter(e.target.value)}
             />
           </div>
         </div>
 
         {/* Sélecteur Tables / Queries */}
-        <div className="mt-3">
+        <div className="mt-2">
           <div className="flex bg-gray-100 rounded p-1">
             <button
               onClick={() => setViewMode('tables')}
@@ -441,9 +480,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
       </div>
 
       {error && (
-        <div className="mb-4 p-2 bg-red-50 text-red-700 text-xs rounded flex-shrink-0">
-          {error}
-        </div>
+        <div className="mb-4 p-2 bg-red-50 text-red-700 text-xs rounded flex-shrink-0">{error}</div>
       )}
 
       {loading && (
@@ -463,7 +500,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                     {database.tables.map((table, tableIndex) => (
                       <div key={table.name}>
                         {/* Table Header */}
-                        <div 
+                        <div
                           className="flex items-center px-1 py-0.5 hover:bg-gray-100 cursor-pointer rounded text-sm min-w-0"
                           onClick={() => handleTableClick(table.name, database.name)}
                         >
@@ -472,7 +509,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                           ) : (
                             <Table className="h-3 w-3 text-green-600 mx-2 flex-shrink-0" />
                           )}
-                          <span 
+                          <span
                             className="text-gray-700 truncate flex-1 min-w-0 font-mono"
                             style={{ fontFamily: 'Menlo, Monaco, "Courier New", monospace' }}
                             title={table.name}
@@ -485,7 +522,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                   </div>
                 </div>
               ))}
-              
+
               {/* Message quand aucune table ne correspond */}
               {searchFilter && filteredDatabases.every(db => db.tables.length === 0) && (
                 <div className="text-center text-gray-500 text-sm py-8">
@@ -497,16 +534,16 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
           ) : (
             <>
               {/* Queries List */}
-              {filteredQueries.map((query) => (
+              {filteredQueries.map(query => (
                 <div key={query.fileName}>
-                  <div 
+                  <div
                     className="flex items-center px-1 py-0.5 hover:bg-gray-100 cursor-pointer rounded text-sm min-w-0"
                     onClick={() => handleQueryClick(query.fileName, query.filePath)}
-                    onContextMenu={(e) => handleQueryRightClick(e, query)}
+                    onContextMenu={e => handleQueryRightClick(e, query)}
                   >
                     <FileText className="h-3 w-3 text-purple-600 mx-2 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div 
+                      <div
                         className="text-gray-700 truncate font-mono"
                         style={{ fontFamily: 'Menlo, Monaco, "Courier New", monospace' }}
                         title={query.fileName}
@@ -523,7 +560,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                   </div>
                 </div>
               ))}
-              
+
               {/* Message quand aucune requête ne correspond */}
               {searchFilter && filteredQueries.length === 0 && (
                 <div className="text-center text-gray-500 text-sm py-8">
@@ -531,7 +568,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                   <p>No queries found matching "{searchFilter}"</p>
                 </div>
               )}
-              
+
               {/* Message quand aucune requête n'est sauvegardée */}
               {!searchFilter && filteredQueries.length === 0 && (
                 <div className="text-center text-gray-500 text-sm py-8">
@@ -553,7 +590,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
             left: `${contextMenu.x}px`,
             top: `${contextMenu.y}px`,
           }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
         >
           <button
             className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
