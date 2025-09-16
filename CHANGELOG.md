@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2025-09-03
+
+### Added
+- **Keyboard shortcuts**: Cmd+W now closes table tabs (not connection), Cmd+F opens filter panel
+- **Enhanced filter operators**: Added TablePlus-style operators (BETWEEN, ILIKE, Contains, Has prefix/suffix, case-insensitive variants)
+- **Improved filter UI**: Filter operators now display as symbols (=, !=, >, <, etc.) instead of text labels
+- **Filter reliability**: Apply button now always reloads data, even without filter changes
+
+### Fixed
+- **macOS behavior**: Cmd+W properly closes table tabs instead of entire application
+- **Filter panel**: Filters now consistently reload data when applied
+- **Table tab management**: Better handling of active table tab closure
+
+### Changed
+- **Filter operators**: Simplified display with SQL symbols for better clarity
+- **Keyboard navigation**: More intuitive shortcuts aligned with standard applications
+
 ## [0.2.4] - 2025-08-28
 
 ### Added

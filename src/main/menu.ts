@@ -55,7 +55,11 @@ export function createMenu(mainWindow: BrowserWindow | null): Menu {
         { type: 'separator' },
         ...(isMac
           ? [
-              { label: 'Fermer la fenêtre', role: 'close' as const },
+              {
+                label: 'Close Tab',
+                accelerator: 'CmdOrCtrl+W',
+                click: () => sendToRenderer('close-tab'),
+              },
             ]
           : [
               { label: 'Préférences...', accelerator: 'CmdOrCtrl+,', click: () => showPreferences() },

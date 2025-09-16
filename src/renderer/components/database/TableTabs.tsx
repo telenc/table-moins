@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { X, Plus, Table as TableIcon, FileText } from 'lucide-react';
-import { DataViewer } from './DataViewer';
+import { DataViewer, DataViewerRef } from './DataViewer';
 import { SqlEditor } from './SqlEditor';
 import { TabConnection } from '../../../database/connection-service';
 import { useSqlEditorStore } from '../../stores/sqlEditorStore';
@@ -21,12 +21,15 @@ interface TableTabsProps {
 
 export interface TableTabsRef {
   loadQueryFile: (fileName: string, filePath: string) => void;
+  closeActiveTableTab: () => boolean; // retourne true si un onglet a été fermé
+  openFilter: () => void;
 }
 
 export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, onTableOpen }, ref) => {
   const [tableTabs, setTableTabs] = useState<TableTab[]>([]);
   const [activeTableTabId, setActiveTableTabId] = useState<string | null>(null);
   const [hasLoadedFirstTable, setHasLoadedFirstTable] = useState(false);
+  const dataViewerRef = useRef<DataViewerRef>(null);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -95,8 +98,20 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
         setTableTabs(prev => [...prev, newTab]);
         setActiveTableTabId(newTab.id);
       }
+    },
+    closeActiveTableTab: () => {
+      if (activeTableTabId) {
+        closeTableTab(activeTableTabId);
+        return true; // Un onglet a été fermé
+      }
+      return false; // Aucun onglet à fermer
+    },
+    openFilter: () => {
+      if (dataViewerRef.current) {
+        dataViewerRef.current.openFilter();
+      }
     }
-  }), [activeTab, tableTabs]);
+  }), [activeTab, tableTabs, activeTableTabId]);
 
   // Reset tabs when connection changes
   useEffect(() => {
@@ -368,6 +383,7 @@ export const TableTabs = forwardRef<TableTabsRef, TableTabsProps>(({ activeTab, 
             </div>
           ) : (
             <DataViewer
+              ref={dataViewerRef}
               activeTab={activeTab}
               tableName={activeTableTab.tableName!}
               tabId={activeTableTab.id}

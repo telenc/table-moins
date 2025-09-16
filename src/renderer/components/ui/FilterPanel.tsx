@@ -3,7 +3,7 @@ import { Plus, Minus, Search, Code2, Filter } from 'lucide-react';
 
 export type FilterMode = 'builder' | 'raw';
 
-type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE' | 'IN' | 'NOT IN' | 'IS NULL' | 'IS NOT NULL';
+type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE' | 'ILIKE' | 'NOT ILIKE' | 'IN' | 'NOT IN' | 'IS NULL' | 'IS NOT NULL' | 'BETWEEN' | 'NOT BETWEEN' | 'STARTS WITH' | 'ENDS WITH' | 'STARTS WITH (CI)' | 'ENDS WITH (CI)' | 'CONTAINS' | 'NOT CONTAINS' | 'CONTAINS (CI)' | 'NOT CONTAINS (CI)';
 
 export interface FilterCondition {
   id: string;
@@ -68,18 +68,30 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   }, [initialWhere, initialMode, initialConditions, initialized]);
 
   const operators: { value: FilterOperator; label: string }[] = [
-    { value: '=', label: 'Equals' },
-    { value: '!=', label: 'Not equals' },
-    { value: '>', label: 'Greater than' },
-    { value: '<', label: 'Less than' },
-    { value: '>=', label: 'Greater or equal' },
-    { value: '<=', label: 'Less or equal' },
-    { value: 'LIKE', label: 'Contains' },
-    { value: 'NOT LIKE', label: 'Does not contain' },
-    { value: 'IN', label: 'In list' },
-    { value: 'NOT IN', label: 'Not in list' },
-    { value: 'IS NULL', label: 'Is empty' },
-    { value: 'IS NOT NULL', label: 'Is not empty' }
+    { value: '=', label: '=' },
+    { value: '!=', label: '!=' },
+    { value: '>', label: '>' },
+    { value: '<', label: '<' },
+    { value: '>=', label: '>=' },
+    { value: '<=', label: '<=' },
+    { value: 'IN', label: 'IN' },
+    { value: 'NOT IN', label: 'NOT IN' },
+    { value: 'IS NULL', label: 'IS NULL' },
+    { value: 'IS NOT NULL', label: 'IS NOT NULL' },
+    { value: 'BETWEEN', label: 'BETWEEN' },
+    { value: 'NOT BETWEEN', label: 'NOT BETWEEN' },
+    { value: 'LIKE', label: 'LIKE' },
+    { value: 'NOT LIKE', label: 'NOT LIKE' },
+    { value: 'ILIKE', label: 'ILIKE' },
+    { value: 'NOT ILIKE', label: 'NOT ILIKE' },
+    { value: 'CONTAINS', label: 'Contains' },
+    { value: 'NOT CONTAINS', label: 'Not contains' },
+    { value: 'CONTAINS (CI)', label: 'Contains - Case insensitive' },
+    { value: 'NOT CONTAINS (CI)', label: 'Not contains - Case insensitive' },
+    { value: 'STARTS WITH', label: 'Has prefix' },
+    { value: 'ENDS WITH', label: 'Has suffix' },
+    { value: 'STARTS WITH (CI)', label: 'Has prefix - Case insensitive' },
+    { value: 'ENDS WITH (CI)', label: 'Has suffix - Case insensitive' }
   ];
 
   const addCondition = () => {
@@ -126,11 +138,38 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         case 'LIKE':
         case 'NOT LIKE':
           return `${escapedColumn} ${operator} '%${value.replace(/'/g, "''")}%'`;
+        case 'ILIKE':
+        case 'NOT ILIKE':
+          return `${escapedColumn} ${operator} '%${value.replace(/'/g, "''")}%'`;
         case 'IN':
         case 'NOT IN': {
           const values = value.split(',').map(v => `'${v.trim().replace(/'/g, "''")}'`).join(', ');
           return `${escapedColumn} ${operator} (${values})`;
         }
+        case 'BETWEEN':
+        case 'NOT BETWEEN': {
+          const values = value.split(',').map(v => v.trim());
+          if (values.length >= 2) {
+            return `${escapedColumn} ${operator} '${values[0].replace(/'/g, "''")}' AND '${values[1].replace(/'/g, "''")}'`;
+          }
+          return `${escapedColumn} = '${value.replace(/'/g, "''")}'`;
+        }
+        case 'CONTAINS':
+          return `${escapedColumn} LIKE '%${value.replace(/'/g, "''")}%'`;
+        case 'NOT CONTAINS':
+          return `${escapedColumn} NOT LIKE '%${value.replace(/'/g, "''")}%'`;
+        case 'CONTAINS (CI)':
+          return `LOWER(${escapedColumn}) LIKE LOWER('%${value.replace(/'/g, "''")}%')`;
+        case 'NOT CONTAINS (CI)':
+          return `LOWER(${escapedColumn}) NOT LIKE LOWER('%${value.replace(/'/g, "''")}%')`;
+        case 'STARTS WITH':
+          return `${escapedColumn} LIKE '${value.replace(/'/g, "''")}%'`;
+        case 'ENDS WITH':
+          return `${escapedColumn} LIKE '%${value.replace(/'/g, "''")}'`;
+        case 'STARTS WITH (CI)':
+          return `LOWER(${escapedColumn}) LIKE LOWER('${value.replace(/'/g, "''")}%')`;
+        case 'ENDS WITH (CI)':
+          return `LOWER(${escapedColumn}) LIKE LOWER('%${value.replace(/'/g, "''")}')`; 
         default:
           return `${escapedColumn} ${operator} '${value.replace(/'/g, "''")}'`;
       }

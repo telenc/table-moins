@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   RefreshCw,
   ChevronLeft,
@@ -26,6 +26,10 @@ interface DataViewerProps {
   onBack?: () => void;
   sqlFilter?: string;
   onForeignKeyClick?: (targetTable: string, targetColumn: string, value: any) => void;
+}
+
+export interface DataViewerRef {
+  openFilter: () => void;
 }
 
 interface TableData {
@@ -77,14 +81,14 @@ interface EditingDataCell {
   value: string;
 }
 
-export const DataViewer: React.FC<DataViewerProps> = ({
+export const DataViewer = forwardRef<DataViewerRef, DataViewerProps>(({
   activeTab,
   tableName,
   tabId,
   onBack,
   sqlFilter,
   onForeignKeyClick,
-}) => {
+}, ref) => {
   const [data, setData] = useState<TableData | null>(null);
   const [structure, setStructure] = useState<ColumnStructure[] | null>(null);
   const [indexes, setIndexes] = useState<IndexInfo[] | null>(null);
@@ -450,6 +454,11 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       filterPanelOpen: true, // Panel stays open when applying filters
     });
 
+    // Force reload data even if filter hasn't changed
+    if (viewMode === 'data') {
+      loadTableData();
+    }
+
     // Ne pas fermer le panneau automatiquement
   };
 
@@ -457,6 +466,11 @@ export const DataViewer: React.FC<DataViewerProps> = ({
     setFilterPanelOpen(true);
     saveTableState({ filterPanelOpen: true });
   };
+
+  // Expose openFilter function via ref
+  useImperativeHandle(ref, () => ({
+    openFilter: handleOpenFilter
+  }), []);
 
   const handleReload = () => {
     if (viewMode === 'data') {
@@ -1744,4 +1758,4 @@ export const DataViewer: React.FC<DataViewerProps> = ({
       </div>
     </div>
   );
-};
+});

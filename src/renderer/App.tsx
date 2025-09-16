@@ -295,6 +295,55 @@ export const App: React.FC = () => {
     }
   }, [activeTabId, tabs]);
 
+  // Fermer l'onglet actif (pour Cmd+W)
+  const closeActiveTab = async () => {
+    // D'abord, essayer de fermer l'onglet de table actif
+    if (tableTabsRef.current) {
+      const tableTabClosed = tableTabsRef.current.closeActiveTableTab();
+      if (tableTabClosed) {
+        return; // Si on ferme un onglet de table, on s'arrête là
+      }
+    }
+    
+    // Sinon, fermer l'onglet de connexion si il n'y a pas d'onglet de table
+    if (activeTabId) {
+      try {
+        await window.electronAPI.tabs.close(activeTabId);
+        removeTab(activeTabId);
+        setActiveTab(null);
+        setCurrentView('connections');
+      } catch (error) {
+        console.error('Error closing active tab:', error);
+      }
+    }
+  };
+
+  // Écouter les actions du menu
+  useEffect(() => {
+    const handleMenuAction = (action: string) => {
+      switch (action) {
+        case 'close-tab':
+          closeActiveTab();
+          break;
+        case 'search':
+          // Ouvrir les filtres dans la table active
+          if (tableTabsRef.current) {
+            tableTabsRef.current.openFilter();
+          }
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.electronAPI.onMenuAction(handleMenuAction);
+
+    // Cleanup lors du démontage du composant
+    return () => {
+      window.electronAPI.removeMenuActionListener();
+    };
+  }, [activeTabId]); // Dépendance sur activeTabId pour que la fonction soit à jour
+
   // Charger les onglets depuis le backend
   const loadTabs = async () => {
     try {
