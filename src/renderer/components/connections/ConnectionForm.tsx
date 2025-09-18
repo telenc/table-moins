@@ -96,9 +96,24 @@ export const ConnectionForm: React.FC<ConnectionFormProps> = ({
   }, [visible, editingConnection, form, clearError]);
 
   // Mettre à jour le port par défaut quand le type de base change
-  const handleDatabaseTypeChange = (type: 'mysql' | 'postgresql' | 'sqlite') => {
+  const handleDatabaseTypeChange = (type: 'mysql' | 'postgresql' | 'sqlite' | 'redis') => {
     if (type !== 'sqlite') {
       form.setFieldValue('port', DEFAULT_PORTS[type]);
+    }
+    
+    // Reset Redis-specific fields when switching away from Redis
+    if (type !== 'redis') {
+      form.setFieldsValue({
+        redisDatabase: undefined,
+        clusterNodes: undefined,
+        sentinelNodes: undefined,
+      });
+    } else {
+      // Set default values for Redis
+      form.setFieldsValue({
+        redisDatabase: 0,
+        database: undefined, // Clear SQL database field for Redis
+      });
     }
   };
 
@@ -290,10 +305,40 @@ export const ConnectionForm: React.FC<ConnectionFormProps> = ({
               </Form.Item>
 
               <Form.Item
-                label="Base de données"
-                name="database"
+                noStyle
+                shouldUpdate={(prevValues, currentValues) =>
+                  prevValues.type !== currentValues.type
+                }
               >
-                <Input placeholder="Optionnel" />
+                {({ getFieldValue }) => {
+                  const dbType = getFieldValue('type');
+                  
+                  if (dbType === 'redis') {
+                    return (
+                      <Form.Item
+                        label="Base de données Redis"
+                        name="redisDatabase"
+                        tooltip="Index de la base de données Redis (0-15)"
+                      >
+                        <InputNumber
+                          placeholder="0"
+                          min={0}
+                          max={15}
+                          style={{ width: '100%' }}
+                        />
+                      </Form.Item>
+                    );
+                  }
+                  
+                  return (
+                    <Form.Item
+                      label="Base de données"
+                      name="database"
+                    >
+                      <Input placeholder="Optionnel" />
+                    </Form.Item>
+                  );
+                }}
               </Form.Item>
 
               <Form.Item

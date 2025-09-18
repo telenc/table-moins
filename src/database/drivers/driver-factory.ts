@@ -1,6 +1,7 @@
 import { BaseDatabaseDriver } from './base-driver';
 import { MySQLDriver } from './mysql-driver';
 import { PostgreSQLDriver } from './postgresql-driver';
+import { RedisDriver } from './redis-driver';
 import { DatabaseConnection, DatabaseType } from '../../shared/types/database';
 
 export class DriverFactory {
@@ -13,6 +14,8 @@ export class DriverFactory {
         return new MySQLDriver(connection);
       case 'postgresql':
         return new PostgreSQLDriver(connection);
+      case 'redis':
+        return new RedisDriver(connection);
       case 'sqlite':
         throw new Error('SQLite driver pas encore implémenté');
       default:
@@ -24,13 +27,13 @@ export class DriverFactory {
    * Vérifie si un type de base de données est supporté
    */
   static isSupported(type: DatabaseType): boolean {
-    return ['mysql', 'postgresql'].includes(type);
+    return ['mysql', 'postgresql', 'redis'].includes(type);
   }
 
   /**
    * Récupère la liste des types supportés
    */
   static getSupportedTypes(): DatabaseType[] {
-    return ['mysql', 'postgresql'];
+    return ['mysql', 'postgresql', 'redis'];
   }
 }

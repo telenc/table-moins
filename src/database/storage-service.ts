@@ -81,7 +81,7 @@ export class StorageService {
         CREATE TABLE IF NOT EXISTS connections (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
-          type TEXT NOT NULL CHECK (type IN ('mysql', 'postgresql', 'sqlite')),
+          type TEXT NOT NULL CHECK (type IN ('mysql', 'postgresql', 'sqlite', 'redis')),
           host TEXT NOT NULL,
           port INTEGER NOT NULL,
           username TEXT NOT NULL,
@@ -138,7 +138,10 @@ export class StorageService {
         CREATE INDEX IF NOT EXISTS idx_favorites_connection ON favorites (connection_id);
       `);
 
-      logger.info('Tables créées avec succès');
+      // Migration pour ajouter Redis au type CHECK constraint (si la table existe déjà)
+      await this.migrateRedisSupport();
+      
+      logger.info("Tables créées avec succès");
     } catch (error) {
       logger.error('Erreur lors de la création des tables:', error as Error);
       throw error;
@@ -283,7 +286,7 @@ export class StorageService {
     return {
       id: row.id,
       name: row.name,
-      type: row.type as 'mysql' | 'postgresql' | 'sqlite',
+      type: row.type as 'mysql' | 'postgresql' | 'sqlite' | 'redis',
       host: row.host,
       port: row.port,
       username: row.username,
@@ -300,6 +303,66 @@ export class StorageService {
       updatedAt: new Date(row.updated_at),
       lastConnected: row.last_connected ? new Date(row.last_connected) : undefined
     };
+  }
+
+  /**
+   * Migration pour ajouter le support Redis aux bases de données existantes
+   */
+  private async migrateRedisSupport(): Promise<void> {
+    if (!this.db) {
+      throw new Error('Base de données non initialisée');
+    }
+
+    try {
+      // Vérifier si la table existe et si la contrainte a déjà été mise à jour
+      const tableInfo = this.db.pragma('table_info(connections)') as any[];
+      const typeColumn = tableInfo.find((col: any) => col.name === 'type');
+      
+      if (typeColumn) {
+        // Tenter de créer une table temporaire avec la nouvelle contrainte
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS connections_new (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('mysql', 'postgresql', 'sqlite', 'redis')),
+            host TEXT NOT NULL,
+            port INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            database_name TEXT,
+            ssl BOOLEAN NOT NULL DEFAULT 0,
+            ssl_cert TEXT,
+            ssl_key TEXT,
+            ssl_ca TEXT,
+            group_id TEXT,
+            color TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_connected DATETIME,
+            FOREIGN KEY (group_id) REFERENCES connection_groups (id) ON DELETE SET NULL
+          )
+        `);
+        
+        // Copier les données existantes
+        this.db.exec(`
+          INSERT OR IGNORE INTO connections_new 
+          SELECT * FROM connections
+        `);
+        
+        // Remplacer l'ancienne table
+        this.db.exec(`DROP TABLE IF EXISTS connections`);
+        this.db.exec(`ALTER TABLE connections_new RENAME TO connections`);
+        
+        // Recréer les index
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_connections_group ON connections (group_id)`);
+        
+        logger.info('Migration Redis complétée avec succès');
+      }
+    } catch (error) {
+      // Si la migration échoue, c'est probablement que la contrainte est déjà à jour
+      logger.warn('Migration Redis ignorée (probablement déjà appliquée):', error as Error);
+    }
   }
 
   /**

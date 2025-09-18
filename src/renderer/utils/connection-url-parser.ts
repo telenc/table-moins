@@ -104,6 +104,7 @@ function normalizeName(
 
 export function parseConnectionUrl(urlString: string): ParsedConnectionInfo | null {
   try {
+    console.log('🔍 Parsing URL:', urlString);
     if (!urlString || typeof urlString !== 'string') return null;
     const clean = urlString.trim();
     if (!clean.includes('://') && !clean.startsWith('file:')) return null;
@@ -112,7 +113,9 @@ export function parseConnectionUrl(urlString: string): ParsedConnectionInfo | nu
     const protoMatch = clean.match(/^([a-zA-Z0-9+.-]+:)/);
     if (!protoMatch) return null;
     const rawProto = protoMatch[1].toLowerCase();
+    console.log('📋 Protocol found:', rawProto);
     const type = PROTOCOL_MAP[rawProto];
+    console.log('🎯 Database type:', type);
     if (!type) return null;
 
     // SQLite / file: -> chemin de fichier
@@ -171,21 +174,122 @@ export function parseConnectionUrl(urlString: string): ParsedConnectionInfo | nu
     }
 
     // --- Schémas non-spéciaux (postgres, mysql, mssql, redis) ---
-    // Beaucoup de runtimes renvoient origin="null" -> on force un parsing via http://
-    // pour extraire correctement user/pass/host/port
-    const forced = new URL(clean.replace(/^([a-zA-Z0-9+.-]+):\/\//, 'http://'));
-    const options = parseQS(new URL(clean).search); // garder les options du vrai URL (s'il les gère)
-    const host = forced.hostname || undefined;
-    const port = forced.port || DEFAULT_PORT[type] || undefined;
-    const username = forced.username ? decodeURIComponent(forced.username) : undefined;
-    const password = forced.password ? decodeURIComponent(forced.password) : undefined;
+    // Parsing manuel pour mieux gérer les caractères spéciaux dans les mots de passe
+    let username: string | undefined;
+    let password: string | undefined;
+    let host: string | undefined;
+    let port: string | undefined;
+    let options: Record<string, string> = {};
+
+    try {
+      // Extraire la partie après le protocole
+      const afterProtocol = clean.replace(/^[a-zA-Z0-9+.-]+:\/\//, '');
+      console.log('🔗 After protocol:', afterProtocol);
+      
+      // Trouver la dernière occurrence de @ pour séparer auth de host
+      const lastAtIndex = afterProtocol.lastIndexOf('@');
+      console.log('📍 Last @ index:', lastAtIndex);
+      
+      if (lastAtIndex !== -1) {
+        // Il y a une authentification
+        const authPart = afterProtocol.slice(0, lastAtIndex);
+        const hostPart = afterProtocol.slice(lastAtIndex + 1);
+        console.log('🔐 Auth part:', authPart);
+        console.log('🏠 Host part:', hostPart);
+        
+        // Parser l'authentification (username:password)
+        const colonIndex = authPart.indexOf(':');
+        if (colonIndex !== -1) {
+          try {
+            username = decodeURIComponent(authPart.slice(0, colonIndex)) || undefined;
+          } catch {
+            username = authPart.slice(0, colonIndex) || undefined;
+          }
+          try {
+            password = decodeURIComponent(authPart.slice(colonIndex + 1)) || undefined;
+          } catch {
+            password = authPart.slice(colonIndex + 1) || undefined;
+          }
+        } else {
+          try {
+            username = decodeURIComponent(authPart) || undefined;
+          } catch {
+            username = authPart || undefined;
+          }
+        }
+        console.log('👤 Username:', username);
+        console.log('🔑 Password:', password);
+        
+        // Parser host:port/path?query
+        const slashIndex = hostPart.indexOf('/');
+        const questionIndex = hostPart.indexOf('?');
+        
+        let hostPortPart: string;
+        let pathAndQuery = '';
+        
+        if (slashIndex !== -1) {
+          hostPortPart = hostPart.slice(0, slashIndex);
+          pathAndQuery = hostPart.slice(slashIndex);
+        } else if (questionIndex !== -1) {
+          hostPortPart = hostPart.slice(0, questionIndex);
+          pathAndQuery = hostPart.slice(questionIndex);
+        } else {
+          hostPortPart = hostPart;
+        }
+        
+        // Parser host:port
+        const portColonIndex = hostPortPart.lastIndexOf(':');
+        if (portColonIndex !== -1 && hostPortPart.indexOf(':') !== hostPortPart.lastIndexOf(':')) {
+          // Cas IPv6 - ne pas traiter comme host:port
+          host = hostPortPart;
+          port = DEFAULT_PORT[type];
+        } else if (portColonIndex !== -1) {
+          host = hostPortPart.slice(0, portColonIndex);
+          port = hostPortPart.slice(portColonIndex + 1) || DEFAULT_PORT[type];
+        } else {
+          host = hostPortPart;
+          port = DEFAULT_PORT[type];
+        }
+        
+        // Parser les options query
+        const queryIndex = pathAndQuery.indexOf('?');
+        if (queryIndex !== -1) {
+          options = parseQS(pathAndQuery.slice(queryIndex + 1));
+        }
+      } else {
+        // Pas d'authentification, utiliser l'ancien parsing
+        const forced = new URL(clean.replace(/^([a-zA-Z0-9+.-]+):\/\//, 'http://'));
+        host = forced.hostname || undefined;
+        port = forced.port || DEFAULT_PORT[type] || undefined;
+        options = parseQS(new URL(clean).search);
+      }
+    } catch (error) {
+      // Fallback sur l'ancien parsing en cas d'erreur
+      const forced = new URL(clean.replace(/^([a-zA-Z0-9+.-]+):\/\//, 'http://'));
+      const originalUrl = new URL(clean);
+      host = forced.hostname || undefined;
+      port = forced.port || DEFAULT_PORT[type] || undefined;
+      username = forced.username ? decodeURIComponent(forced.username) : undefined;
+      password = forced.password ? decodeURIComponent(forced.password) : undefined;
+      options = parseQS(originalUrl.search);
+    }
 
     // DB: pour Redis c'est l'index (/0), pour les autres le nom
-    const rawPath = forced.pathname || '';
-    const database =
-      type === 'redis'
-        ? rawPath.replace(/^\//, '') || undefined
-        : rawPath.replace(/^\//, '') || undefined;
+    // Extraire database depuis pathAndQuery si disponible
+    let database: string | undefined;
+    try {
+      const originalUrl = new URL(clean);
+      const rawPath = originalUrl.pathname || '';
+      if (type === 'redis') {
+        // Pour Redis, database est juste un numéro (0-15), pas le chemin complet
+        const dbMatch = rawPath.match(/^\/(\d+)$/);
+        database = dbMatch ? dbMatch[1] : undefined;
+      } else {
+        database = rawPath.replace(/^\//, '') || undefined;
+      }
+    } catch {
+      database = undefined;
+    }
 
     const hosts = host ? [{ host, port: port ?? '' }] : [];
 
@@ -214,7 +318,8 @@ export function parseConnectionUrl(urlString: string): ParsedConnectionInfo | nu
       options,
       ssl,
     };
-  } catch {
+  } catch (error) {
+    console.log('❌ Parse error:', error);
     return null;
   }
 }
@@ -226,6 +331,7 @@ function getDefaultPort(dbType: string): string {
   const defaultPorts: Record<string, string> = {
     mysql: '3306',
     postgresql: '5432',
+    redis: '6379',
     sqlite: '',
   };
 
@@ -236,7 +342,7 @@ function getDefaultPort(dbType: string): string {
  * Vérifie si une chaîne ressemble à une URL de connexion
  */
 export function isConnectionUrl(value: string): boolean {
-  const urlPattern = /^(postgres|postgresql|mysql|mysql2):\/\/.+/i;
+  const urlPattern = /^(postgres|postgresql|mysql|mysql2|redis|rediss):\/\/.+/i;
   return urlPattern.test(value.trim());
 }
 

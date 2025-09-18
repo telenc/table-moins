@@ -80,7 +80,7 @@ echo "macOS ARM64 App: $(du -sh release/mac-arm64/TableMoins.app 2>/dev/null | c
 echo ""
 echo "📝 Using changelog for version ${VERSION}:"
 
-CHANGELOG="- Enhanced tab management and filter improvements\n- Added Enter key support in filter panel for quick application\n- Fixed filter sharing between tabs - each tab maintains independent filters\n- Multiple tabs can now be opened for the same table"
+CHANGELOG="- 🚀 Redis Integration Foundation: Initial Redis driver implementation with connection support\n- 📊 Redis Data Models: Complete TypeScript interfaces for Redis connections, keys, and values\n- 🏗️ Dual Driver Architecture: Extended database driver system to support both SQL and NoSQL paradigms\n- 🎨 ResizablePanels Component: New UI component for flexible panel layouts\n- 📋 Redis Development Plan: Comprehensive 18-25 week roadmap for full Redis support\n- 🔧 Enhanced Type System: Extended DatabaseType to include Redis connections"
 
 echo ""
 echo "📋 Changelog:"

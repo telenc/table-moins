@@ -824,5 +824,153 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     }
   });
 
-  logger.info('Gestionnaires IPC configurés (avec auto-update)');
+  // ===== REDIS IPC HANDLERS =====
+
+  // Récupérer les clés Redis
+  ipcMain.handle('redis:get-keys', async (_, connectionId: string, pattern: string = '*', database?: string, cursor: string = '0', count: number = 100) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      // Vérifier que c'est bien un driver Redis
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any; // Cast to access Redis methods
+      return await redisDriver.getKeys(pattern, database, cursor, count);
+    } catch (error) {
+      logger.error('Error getting Redis keys:', error as Error);
+      throw error;
+    }
+  });
+
+  // Supprimer toutes les clés d'un dossier (pattern)
+  ipcMain.handle('redis:delete-keys-by-pattern', async (_, connectionId: string, pattern: string) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      return await redisDriver.deleteKeysByPattern(pattern);
+    } catch (error) {
+      logger.error('Error deleting Redis keys by pattern:', error as Error);
+      throw error;
+    }
+  });
+
+  // Récupérer la valeur d'une clé Redis
+  ipcMain.handle('redis:get-key-value', async (_, connectionId: string, key: string) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      return await redisDriver.getKeyValue(key);
+    } catch (error) {
+      logger.error('Error getting Redis key value:', error as Error);
+      throw error;
+    }
+  });
+
+  // Changer de base de données Redis
+  ipcMain.handle('redis:select-database', async (_, connectionId: string, database: number) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      // Execute SELECT command to change database
+      await redisDriver.executeCommand(['SELECT', database.toString()]);
+      return { success: true };
+    } catch (error) {
+      logger.error('Error selecting Redis database:', error as Error);
+      throw error;
+    }
+  });
+
+  // Définir la valeur d'une clé Redis
+  ipcMain.handle('redis:set-key-value', async (_, connectionId: string, key: string, value: string) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      const result = await redisDriver.executeCommand(['SET', key, value]);
+      return result;
+    } catch (error) {
+      logger.error('Error setting Redis key value:', error as Error);
+      throw error;
+    }
+  });
+
+  // Supprimer une clé Redis
+  ipcMain.handle('redis:delete-key', async (_, connectionId: string, key: string) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      const result = await redisDriver.executeCommand(['DEL', key]);
+      return result;
+    } catch (error) {
+      logger.error('Error deleting Redis key:', error as Error);
+      throw error;
+    }
+  });
+
+  // Exécuter une commande Redis arbitraire
+  ipcMain.handle('redis:execute-command', async (_, connectionId: string, command: string[]) => {
+    try {
+      const driver = connectionService.getDriver(connectionId);
+      if (!driver) {
+        throw new Error('Connexion Redis non trouvée ou non active');
+      }
+
+      if (driver.constructor.name !== 'RedisDriver') {
+        throw new Error('Cette connexion n\'est pas une connexion Redis');
+      }
+
+      const redisDriver = driver as any;
+      const result = await redisDriver.executeCommand(command);
+      return result;
+    } catch (error) {
+      logger.error('Error executing Redis command:', error as Error);
+      throw error;
+    }
+  });
+
+  logger.info('Gestionnaires IPC configurés (avec auto-update et Redis)');
 }

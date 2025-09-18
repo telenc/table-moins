@@ -43,7 +43,7 @@ export class MySQLDriver extends BaseDatabaseDriver {
         port: this.connection.port,
         user: this.connection.username,
         password: this.connection.password,
-        database: this.connection.database,
+        database: typeof this.connection.database === 'string' ? this.connection.database : undefined,
         connectionLimit: 10,
         multipleStatements: false, // Sécurité
       };
@@ -305,7 +305,7 @@ export class MySQLDriver extends BaseDatabaseDriver {
       port: this.connection.port,
       user: this.connection.username,
       password: this.connection.password,
-      database: this.connection.database,
+      database: typeof this.connection.database === 'string' ? this.connection.database : undefined,
     };
 
     if (this.connection.ssl) {

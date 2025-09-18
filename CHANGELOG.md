@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-15
+
+### Added
+- **🚀 Redis Integration Foundation**: Initial Redis driver implementation with connection support
+- **📊 Redis Data Models**: Complete TypeScript interfaces for Redis connections, keys, and values
+- **🏗️ Dual Driver Architecture**: Extended database driver system to support both SQL and NoSQL paradigms
+- **🎨 ResizablePanels Component**: New UI component for flexible panel layouts
+- **📋 Redis Development Plan**: Comprehensive 18-25 week roadmap for full Redis support
+- **🔧 Enhanced Type System**: Extended DatabaseType to include Redis connections
+- **📦 Redis Dependencies**: Added redis package and types for Node.js Redis client
+
+### Technical
+- Implemented `RedisDriver` class with basic connection and command execution
+- Created Redis-specific interfaces (`RedisConnection`, `RedisKeyInfo`, `RedisValueInfo`)
+- Enhanced connection factory to handle Redis connections
+- Added Redis branding assets (icons and logos)
+- Extended IPC handlers for Redis-specific operations
+- Updated connection form to support Redis connection parameters
+
+### Infrastructure
+- Added comprehensive unit test structure for Redis driver
+- Created Redis integration plan with detailed technical specifications
+- Enhanced project documentation for multi-database support
+
 ## [0.2.5] - 2025-09-03
 
 ### Added

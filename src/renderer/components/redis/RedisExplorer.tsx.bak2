@@ -1,0 +1,328 @@
+import React, { useState, useEffect } from 'react';
+import { Key, Search, Database, Loader2, RefreshCw, Hash, List, Eye, Layers } from 'lucide-react';
+import { TabConnection } from '../../../database/connection-service';
+
+interface RedisExplorerProps {
+  activeTab: TabConnection | null;
+  onKeySelect?: (key: string) => void;
+}
+
+interface RedisKeyInfo {
+  key: string;
+  type: 'string' | 'hash' | 'list' | 'set' | 'zset' | 'stream' | 'json';
+  ttl: number;
+  memoryUsage?: number;
+  encoding?: string;
+}
+
+interface RedisKeysResult {
+  keys: RedisKeyInfo[];
+  cursor: string;
+  hasMore: boolean;
+}
+
+const RedisTypeIcons: Record<RedisKeyInfo['type'], React.ComponentType<any>> = {
+  string: Key,
+  hash: Hash,
+  list: List,
+  set: Layers,
+  zset: Layers,
+  stream: Eye,
+  json: Eye,
+};
+
+export const RedisExplorer: React.FC<RedisExplorerProps> = ({
+  activeTab,
+  onKeySelect,
+}) => {
+  const [keys, setKeys] = useState<RedisKeyInfo[]>([]);
+  const [searchPattern, setSearchPattern] = useState<string>('*');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDatabase, setSelectedDatabase] = useState<number>(0);
+  const [availableDatabases, setAvailableDatabases] = useState<number[]>([]);
+
+  // Charger les bases de données Redis (0-15) quand l'onglet actif change
+  useEffect(() => {
+    if (activeTab && activeTab.isConnected) {
+      setAvailableDatabases(Array.from({ length: 16 }, (_, i) => i));
+      loadKeys();
+    } else {
+      setKeys([]);
+      setAvailableDatabases([]);
+      setSelectedDatabase(0);
+    }
+  }, [activeTab?.id, activeTab?.isConnected]);
+
+  // Recharger les clés quand la base sélectionnée change
+  useEffect(() => {
+    if (activeTab && activeTab.isConnected) {
+      loadKeys();
+    }
+  }, [selectedDatabase]);
+
+  const loadKeys = async () => {
+    if (!activeTab) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('🔍 RedisExplorer - Loading keys for database:', selectedDatabase);
+
+      // Appeler les méthodes Redis spécifiques
+      const keysList = await window.electron.invoke(
+        'redis:get-keys',
+        activeTab.id,
+        searchPattern,
+        selectedDatabase.toString()
+      );
+
+      console.log('🔍 RedisExplorer - Keys retrieved:', keysList?.length || 0, 'keys');
+      setKeys(keysList || []);
+    } catch (err) {
+      console.error('Error loading Redis keys:', err);
+      setError(`Failed to load keys from database ${selectedDatabase}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyClick = (key: string) => {
+    // Emit a custom event for key selection
+    const event = new CustomEvent('redis-key-selected', {
+      detail: { key, database: selectedDatabase },
+    });
+    window.dispatchEvent(event);
+
+    // Also call the callback if provided
+    onKeySelect?.(key);
+  };
+
+  const handlePatternSearch = () => {
+    loadKeys();
+  };
+
+  const formatTTL = (ttl: number): string => {
+    if (ttl === -1) return '∞'; // No expiry
+    if (ttl === -2) return 'EXP'; // Expired
+    if (ttl < 60) return `${ttl}s`;
+    if (ttl < 3600) return `${Math.floor(ttl / 60)}m`;
+    if (ttl < 86400) return `${Math.floor(ttl / 3600)}h`;
+    return `${Math.floor(ttl / 86400)}d`;
+  };
+
+  const getTypeColor = (type: RedisKeyInfo['type']): string => {
+    const colors = {
+      string: 'text-blue-600',
+      hash: 'text-green-600',
+      list: 'text-purple-600',
+      set: 'text-orange-600',
+      zset: 'text-red-600',
+      stream: 'text-teal-600',
+      json: 'text-indigo-600',
+    };
+    return colors[type] || 'text-gray-600';
+  };
+
+  if (!activeTab) {
+    return (
+      <div className="p-4 text-center text-gray-500">
+        <Database className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+        <p className="text-sm">No active Redis connection</p>
+      </div>
+    );
+  }
+
+  if (!activeTab.isConnected) {
+    return (
+      <div className="p-4">
+        <div className="mb-4">
+          <h3 className="font-medium text-gray-900 mb-1">Redis Explorer</h3>
+          <p className="text-xs text-gray-500">{activeTab.connection.name}</p>
+        </div>
+
+        <div className="text-center text-gray-500 bg-gray-50 rounded-lg p-6">
+          <Database className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-sm font-medium mb-1">{activeTab.connection.name}</p>
+          <p className="text-xs text-gray-500 mb-3">
+            {activeTab.connection.host}:{activeTab.connection.port}
+          </p>
+          <p className="text-xs text-red-500 mb-4">Not connected</p>
+          <button
+            className="w-full px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+            onClick={async () => {
+              try {
+                await window.electron.invoke('tabs:connect', activeTab.id);
+              } catch (error) {
+                console.error('Redis connection failed:', error);
+              }
+            }}
+          >
+            Connect to Redis
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="mb-4 flex-shrink-0 p-4 pb-0">
+        {/* Sélecteur de base de données Redis */}
+        <div className="mt-0">
+          <div className="relative border border-gray-300 rounded bg-white">
+            <span className="absolute left-2 top-1.5 text-xs text-gray-500 pointer-events-none">
+              DB:
+            </span>
+            <select
+              className="w-full text-xs bg-transparent border-0 pl-10 pr-6 py-1.5 appearance-none cursor-pointer focus:outline-none"
+              value={selectedDatabase}
+              onChange={async e => {
+                const newDatabase = parseInt(e.target.value);
+                try {
+                  setLoading(true);
+                  // Changer de base de données Redis côté serveur
+                  await window.electron.invoke(
+                    'redis:select-database',
+                    activeTab.id,
+                    newDatabase
+                  );
+                  setSelectedDatabase(newDatabase);
+                } catch (error) {
+                  console.error('Error changing Redis database:', error);
+                  setError(`Failed to change to database: ${newDatabase}`);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              {availableDatabases.map(db => (
+                <option key={db} value={db}>
+                  Database {db}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-2 top-1.5 pointer-events-none">
+              <svg
+                className="w-3 h-3 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Pattern de recherche Redis */}
+        <div className="mt-2">
+          <div className="flex gap-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1.5 h-3 w-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Key pattern (e.g., user:*, cache:*, *)"
+                className="w-full text-xs border border-gray-300 rounded px-2 py-1 pl-7 bg-white"
+                value={searchPattern}
+                onChange={e => setSearchPattern(e.target.value)}
+                onKeyPress={e => {
+                  if (e.key === 'Enter') {
+                    handlePatternSearch();
+                  }
+                }}
+              />
+            </div>
+            <button
+              onClick={handlePatternSearch}
+              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              Search
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-2 bg-red-50 text-red-700 text-xs rounded flex-shrink-0 mx-4">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center text-gray-500 text-sm flex-shrink-0">
+          <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+          Loading keys...
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="space-y-1 p-4 pt-0 pb-6">
+          {keys.length > 0 ? (
+            keys.map((keyInfo) => {
+              const IconComponent = RedisTypeIcons[keyInfo.type];
+              return (
+                <div key={keyInfo.key}>
+                  <div
+                    className="flex items-center px-1 py-0.5 hover:bg-red-50 cursor-pointer rounded text-sm min-w-0 group"
+                    onClick={() => handleKeyClick(keyInfo.key)}
+                  >
+                    <IconComponent className={`h-3 w-3 mx-2 flex-shrink-0 ${getTypeColor(keyInfo.type)}`} />
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-gray-700 truncate font-mono text-xs"
+                        style={{ fontFamily: 'Menlo, Monaco, "Courier New", monospace' }}
+                        title={keyInfo.key}
+                      >
+                        {keyInfo.key}
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <span className={`font-medium ${getTypeColor(keyInfo.type)}`}>
+                          {keyInfo.type.toUpperCase()}
+                        </span>
+                        {keyInfo.ttl !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span>TTL: {formatTTL(keyInfo.ttl)}</span>
+                          </>
+                        )}
+                        {keyInfo.memoryUsage && (
+                          <>
+                            <span>•</span>
+                            <span>{Math.round(keyInfo.memoryUsage / 1024)}KB</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            !loading && (
+              <div className="text-center text-gray-500 text-sm py-8">
+                <Key className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <p>No keys found in database {selectedDatabase}</p>
+                <p className="text-xs mt-1">
+                  Try different search pattern: *, user:*, cache:*
+                </p>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

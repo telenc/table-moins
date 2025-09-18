@@ -1,6 +1,6 @@
 {
   "name": "table-moins",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Modern desktop application for SQL database management - TablePlus clone",
   "main": "dist/main/main/main.js",
   "author": {
@@ -81,6 +81,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.3",
     "@tailwindcss/vite": "^4.1.12",
+    "@types/redis": "^4.0.10",
     "@uiw/react-json-view": "^2.0.0-alpha.36",
     "antd": "^5.12.5",
     "better-sqlite3": "^9.6.0",
@@ -95,6 +96,7 @@
     "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "redis": "^5.8.2",
     "sonner": "^2.0.7",
     "styled-components": "^6.1.6",
     "tailwind-merge": "^3.3.1",

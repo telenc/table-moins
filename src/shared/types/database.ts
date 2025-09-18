@@ -1,5 +1,5 @@
 // Types pour les connexions de base de données
-export type DatabaseType = 'mysql' | 'postgresql' | 'sqlite';
+export type DatabaseType = 'mysql' | 'postgresql' | 'sqlite' | 'redis';
 
 export interface DatabaseConnection {
   id: string;
@@ -9,7 +9,7 @@ export interface DatabaseConnection {
   port: number;
   username: string;
   password: string; // Sera chiffré
-  database?: string;
+  database?: string | number; // Redis uses numbers (0-15), SQL uses strings
   ssl?: boolean;
   sslCert?: string;
   sslKey?: string;
@@ -20,6 +20,10 @@ export interface DatabaseConnection {
   isActive: boolean;
   group?: string;
   color?: string;
+  // Redis-specific fields
+  redisDatabase?: number; // Redis database index (0-15)
+  clusterNodes?: string[]; // For Redis clusters
+  sentinelNodes?: string[]; // For Redis Sentinel
 }
 
 export interface DatabaseInfo {
@@ -100,4 +104,66 @@ export interface QueryError {
   position?: number;
   query: string;
   stack?: string;
+}
+
+// ===== REDIS-SPECIFIC TYPES =====
+
+// Redis data types
+export type RedisDataType = 'string' | 'hash' | 'list' | 'set' | 'zset' | 'stream' | 'json';
+
+// Redis connection (extends base connection with Redis-specific fields)
+export interface RedisConnectionInfo {
+  database?: number; // Redis database index (0-15)
+  clusterNodes?: string[]; // For Redis clusters
+  sentinelNodes?: string[]; // For Redis Sentinel
+  redisPassword?: string; // Redis AUTH password (separate from username)
+}
+
+// Redis key information (equivalent to TableInfo for SQL)
+export interface RedisKeyInfo {
+  key: string;
+  type: RedisDataType;
+  ttl: number; // Time to live (-1 = no expiry, -2 = expired)
+  memoryUsage?: number;
+  encoding?: string;
+  lastAccessed?: Date;
+}
+
+// Redis value information (flexible based on type)
+export interface RedisValueInfo {
+  key: string;
+  type: RedisDataType;
+  value: any; // Type-specific value structure
+  size: number;
+  encoding?: string;
+  ttl: number;
+}
+
+// Redis command result (equivalent to QueryResult for SQL)
+export interface RedisCommandResult {
+  command: string[];
+  result: any;
+  type: 'success' | 'error';
+  executionTime: number;
+  affectedKeys?: string[];
+}
+
+// Redis database information
+export interface RedisDatabaseInfo {
+  version: string;
+  mode: 'standalone' | 'cluster' | 'sentinel';
+  databases: number; // Number of databases (usually 16)
+  memory: {
+    used: number;
+    peak: number;
+    fragmentation: number;
+  };
+  keyspace: {
+    [db: string]: {
+      keys: number;
+      expires: number;
+    };
+  };
+  clients: number;
+  uptime: number;
 }

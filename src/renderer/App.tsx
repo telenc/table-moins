@@ -27,6 +27,9 @@ import { useTabsStore } from './stores/tabs-store';
 import { TabConnection } from '../database/connection-service';
 import { DatabaseExplorer } from './components/database/DatabaseExplorer';
 import { TableTabs, TableTabsRef } from './components/database/TableTabs';
+import { RedisExplorer } from './components/redis/RedisExplorer';
+import { RedisValueViewer } from './components/redis/RedisValueViewer';
+import { ResizablePanels } from './components/ui/ResizablePanels';
 import { parseConnectionUrl, isConnectionUrl } from './utils/connection-url-parser';
 import { toast } from 'sonner';
 import { UpdateNotification } from './components/ui/UpdateNotification';
@@ -35,6 +38,7 @@ import type {
   ConnectionFormData,
   ConnectionTestResult,
 } from './types/connections';
+import { DATABASE_TYPES, DEFAULT_PORTS } from './types/connections';
 
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<
@@ -43,6 +47,7 @@ export const App: React.FC = () => {
   const { tabs, activeTabId, addTab, setActiveTab, removeTab } = useTabsStore();
   const [currentActiveTab, setCurrentActiveTab] = useState<TabConnection | null>(null);
   const tabSystemRef = useRef<TabSystemRef>(null);
+  const [selectedRedisKey, setSelectedRedisKey] = useState<string | undefined>(undefined);
 
   // États pour la liste des connexions
   const [connections, setConnections] = useState<DatabaseConnection[]>([]);
@@ -124,8 +129,9 @@ export const App: React.FC = () => {
   // Tester une connexion
   const handleTestConnection = async () => {
     // Validation basique
-    if (!connectionForm.type || !connectionForm.host || !connectionForm.username) {
-      toast.error('Veuillez remplir les champs obligatoires (type, host, utilisateur)');
+    const isRedis = connectionForm.type === 'redis';
+    if (!connectionForm.type || !connectionForm.host || (!connectionForm.username && !isRedis)) {
+      toast.error(`Veuillez remplir les champs obligatoires (type, host${isRedis ? '' : ', utilisateur'})`);
       return;
     }
 
@@ -133,10 +139,10 @@ export const App: React.FC = () => {
     try {
       const formData: ConnectionFormData = {
         name: connectionForm.name,
-        type: connectionForm.type as 'mysql' | 'postgresql' | 'sqlite',
+        type: connectionForm.type as DatabaseConnection['type'],
         host: connectionForm.host,
-        port: parseInt(connectionForm.port) || (connectionForm.type === 'postgresql' ? 5432 : 3306),
-        username: connectionForm.username,
+        port: parseInt(connectionForm.port) || DEFAULT_PORTS[connectionForm.type as keyof typeof DEFAULT_PORTS] || 3306,
+        username: connectionForm.username || (isRedis ? 'default' : ''),
         password: connectionForm.password,
         database: connectionForm.database,
         ssl: connectionForm.ssl,
@@ -164,11 +170,12 @@ export const App: React.FC = () => {
   // Sauvegarder une connexion
   const handleSaveConnection = async () => {
     // Validation
+    const isRedis = connectionForm.type === 'redis';
     if (
       !connectionForm.name.trim() ||
       !connectionForm.type ||
       !connectionForm.host ||
-      !connectionForm.username
+      (!connectionForm.username && !isRedis)
     ) {
       toast.error('Veuillez remplir tous les champs obligatoires');
       return;
@@ -178,10 +185,10 @@ export const App: React.FC = () => {
     try {
       const formData: ConnectionFormData = {
         name: connectionForm.name,
-        type: connectionForm.type as 'mysql' | 'postgresql' | 'sqlite',
+        type: connectionForm.type as DatabaseConnection['type'],
         host: connectionForm.host,
-        port: parseInt(connectionForm.port) || (connectionForm.type === 'postgresql' ? 5432 : 3306),
-        username: connectionForm.username,
+        port: parseInt(connectionForm.port) || DEFAULT_PORTS[connectionForm.type as keyof typeof DEFAULT_PORTS] || 3306,
+        username: connectionForm.username || (isRedis ? 'default' : ''),
         password: connectionForm.password,
         database: connectionForm.database,
         ssl: connectionForm.ssl,
@@ -317,6 +324,27 @@ export const App: React.FC = () => {
       }
     }
   };
+
+  // Écouter les événements Redis
+  useEffect(() => {
+    const handleRedisKeySelected = (event: CustomEvent) => {
+      const { key } = event.detail;
+      setSelectedRedisKey(key);
+    };
+
+    const handleRedisKeysUpdated = () => {
+      // Clear selected key when keys are updated (e.g., after deletion)
+      setSelectedRedisKey(undefined);
+    };
+
+    window.addEventListener('redis-key-selected', handleRedisKeySelected as any);
+    window.addEventListener('redis-keys-updated', handleRedisKeysUpdated);
+
+    return () => {
+      window.removeEventListener('redis-key-selected', handleRedisKeySelected as any);
+      window.removeEventListener('redis-keys-updated', handleRedisKeysUpdated);
+    };
+  }, []);
 
   // Écouter les actions du menu
   useEffect(() => {
@@ -470,9 +498,14 @@ export const App: React.FC = () => {
                       <SelectValue placeholder="Sélectionnez un type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mysql">MySQL</SelectItem>
-                      <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                      <SelectItem value="sqlite">SQLite</SelectItem>
+                      {DATABASE_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <span className="flex items-center gap-2">
+                            <span>{type.icon}</span>
+                            {type.label}
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -559,7 +592,7 @@ export const App: React.FC = () => {
                       isTestingConnection ||
                       !connectionForm.type ||
                       !connectionForm.host ||
-                      !connectionForm.username
+                      (!connectionForm.username && connectionForm.type !== 'redis')
                     }
                   >
                     {isTestingConnection ? (
@@ -577,7 +610,7 @@ export const App: React.FC = () => {
                       !connectionForm.name.trim() ||
                       !connectionForm.type ||
                       !connectionForm.host ||
-                      !connectionForm.username
+                      (!connectionForm.username && connectionForm.type !== 'redis')
                     }
                   >
                     {isSavingConnection ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
@@ -738,6 +771,19 @@ export const App: React.FC = () => {
                           }}
                         />
                       )}
+                      {connection.type === 'redis' && (
+                        <img
+                          src="/assets/redis.svg"
+                          alt="Redis"
+                          className="w-6 h-6 rounded object-cover"
+                          onError={e => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            target.parentElement!.innerHTML =
+                              '<div class="w-6 h-6 rounded bg-red-500 flex items-center justify-center text-white text-xs font-bold">RD</div>';
+                          }}
+                        />
+                      )}
                       {connection.type === 'mysql' && (
                         <div className="w-6 h-6 rounded bg-orange-500 flex items-center justify-center text-white text-xs font-bold">
                           My
@@ -767,21 +813,46 @@ export const App: React.FC = () => {
         </div>
       );
     } else if (currentView === 'database') {
-      return (
-        <div className="flex-1 flex h-full">
-          <div className="w-64 border-r bg-white flex flex-col h-full">
-            <DatabaseExplorer
-              activeTab={currentActiveTab}
-              onTableSelect={() => {}}
-              onQuerySelect={handleQuerySelect}
-            />
-          </div>
+      // Vérifier si c'est Redis ou SQL
+      const isRedisConnection = currentActiveTab?.connection?.type === 'redis';
 
-          <div className="flex-1 min-w-0">
-            <TableTabs ref={tableTabsRef} activeTab={currentActiveTab} />
+      if (isRedisConnection) {
+        // Interface Redis with resizable panels
+        return (
+          <ResizablePanels
+            className="flex-1"
+            defaultLeftWidth={256}
+            minLeftWidth={200}
+            maxLeftWidth={600}
+          >
+            <RedisExplorer
+              activeTab={currentActiveTab}
+              onKeySelect={(key) => setSelectedRedisKey(key)}
+            />
+            <RedisValueViewer
+              activeTab={currentActiveTab}
+              selectedKey={selectedRedisKey}
+            />
+          </ResizablePanels>
+        );
+      } else {
+        // Interface SQL (PostgreSQL, MySQL, etc.)
+        return (
+          <div className="flex-1 flex h-full">
+            <div className="w-64 border-r bg-white flex flex-col h-full">
+              <DatabaseExplorer
+                activeTab={currentActiveTab}
+                onTableSelect={() => {}}
+                onQuerySelect={handleQuerySelect}
+              />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <TableTabs ref={tableTabsRef} activeTab={currentActiveTab} />
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
     }
     return null;
   };
@@ -839,6 +910,19 @@ export const App: React.FC = () => {
                         target.style.display = 'none';
                         target.parentElement!.innerHTML =
                           '<div class="w-3 h-3 rounded bg-blue-500 flex items-center justify-center text-white text-xs font-bold">P</div>';
+                      }}
+                    />
+                  )}
+                  {tab.connection.type === 'redis' && (
+                    <img
+                      src="/assets/redis.svg"
+                      alt="Redis"
+                      className="w-3 h-3 rounded object-cover"
+                      onError={e => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.parentElement!.innerHTML =
+                          '<div class="w-3 h-3 rounded bg-red-500 flex items-center justify-center text-white text-xs font-bold">R</div>';
                       }}
                     />
                   )}
